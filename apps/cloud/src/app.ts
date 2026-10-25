@@ -331,14 +331,17 @@ function build(): Router {
     }
   });
   const html = (r: Req, code: number, body: string) => { r.res.writeHead(code, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); r.res.end(body); return undefined; };
+  // La réécriture Vercel (/oauth/:path*) ajoute « path » à la requête : on le retire.
+  const authQuery = (r: Req) => { const q = new URLSearchParams(r.query); q.delete('path'); return q; };
   R.get('/oauth/authorize', guard(async (r) => {
-    const a = oauth.authRequest(r.query);
-    if (!r.s) { r.res.writeHead(302, { location: `/#/connexion?retour=${encodeURIComponent(r.url.pathname + r.url.search)}` }); r.res.end(); return undefined; }
-    return html(r, 200, oauth.consentPage(a, r.s.user.email, r.url.search.slice(1)));
+    const q = authQuery(r);
+    const a = oauth.authRequest(q);
+    if (!r.s) { r.res.writeHead(302, { location: `/#/connexion?retour=${encodeURIComponent(`/oauth/authorize?${q}`)}` }); r.res.end(); return undefined; }
+    return html(r, 200, oauth.consentPage(a, r.s.user.email, q.toString()));
   }));
   R.post('/oauth/authorize', guard(async (r) => {
     const s = need(r);
-    const a = oauth.authRequest(r.query);
+    const a = oauth.authRequest(authQuery(r));
     const f = await oauth.formBody(r.raw);
     const to = f.get('decision') === 'allow' ? await oauth.approve(s, a) : oauth.denyUrl(a);
     r.res.writeHead(302, { location: to }); r.res.end();

@@ -12,7 +12,8 @@ const b64 = (b: Buffer | string) => Buffer.from(b).toString('base64url');
 const hmac = (s: string) => crypto.createHmac('sha256', cloud.serverSecret).update(`oauth:${s}`).digest('base64url').slice(0, 32);
 const aesKey = () => crypto.createHash('sha256').update(`${cloud.serverSecret}:oauth-code`).digest();
 
-export const origin = (raw: http.IncomingMessage) => cloud.publicUrl || `https://${raw.headers.host}`;
+// L'adresse appelée par le client (le lien fixe), pas l'URL de production par défaut de Vercel.
+export const origin = (raw: http.IncomingMessage) => (raw.headers.host ? `https://${raw.headers.host}` : cloud.publicUrl);
 
 export const protectedResource = (raw: http.IncomingMessage) => ({
   resource: `${origin(raw)}/api/mcp`, authorization_servers: [origin(raw)], bearer_methods_supported: ['header'], resource_name: 'ZODIAK AI',
