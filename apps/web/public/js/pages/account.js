@@ -20,7 +20,7 @@ export function mount(root) {
 
   async function loadCredits() {
     try {
-      const c = await request('/api/credits');
+      const c = await request('/credits');
       clear(credits);
       credits.append(h('span', { class: 'label' }, 'Mes crédits'), h('b', { class: 'big' }, `✦ ${c.balance}`),
         h('ul', { class: 'ledger' }, ...c.ledger.slice(0, 8).map((l) => h('li', {}, h('span', {}, l.reason), h('b', { class: l.delta < 0 ? 'neg' : 'pos' }, `${l.delta > 0 ? '+' : ''}${l.delta}`), h('time', {}, fmt(l.createdAt))))));
@@ -29,7 +29,7 @@ export function mount(root) {
 
   async function loadOwner() {
     try {
-      const r = await request('/api/admin/usage');
+      const r = await request('/admin/usage');
       owner.hidden = false;
       clear(owner);
       const fal = r.fal.error ? h('p', { class: 'hint' }, `Solde fal indisponible (${r.fal.error}). Votre solde reste visible sur fal.ai → Billing.`) : h('b', { class: 'big' }, usd(r.fal.balance));
@@ -43,14 +43,14 @@ export function mount(root) {
 
   async function loadTokens() {
     try {
-      const r = await request('/api/tokens');
+      const r = await request('/tokens');
       clear(tokens);
       if (!r.items.length) tokens.append(h('li', { class: 'hint' }, 'Aucune clé pour le moment.'));
       for (const t of r.items) {
         tokens.append(h('li', {}, h('b', {}, t.label), h('span', { class: 'hint' }, `créée ${fmt(t.createdAt)} · utilisée ${fmt(t.lastUsedAt)}`),
           h('button', { type: 'button', class: 'btn btn-ghost btn-small', onclick: async () => {
             if (!confirm(`Supprimer la clé « ${t.label} » ? Le connecteur qui l'utilise cessera de fonctionner.`)) return;
-            await request(`/api/tokens/${t.id}`, { method: 'DELETE' }).catch((e) => err.replaceChildren(errorBox(describeError(e))));
+            await request(`/tokens/${t.id}`, { method: 'DELETE' }).catch((e) => err.replaceChildren(errorBox(describeError(e))));
             void loadTokens();
           } }, 'Supprimer')));
       }
@@ -62,7 +62,7 @@ export function mount(root) {
     clear(err); clear(created);
     submit.disabled = true;
     try {
-      const r = await request('/api/tokens', { method: 'POST', json: { password: pwd.value, label: label.value } });
+      const r = await request('/tokens', { method: 'POST', json: { password: pwd.value, label: label.value } });
       pwd.value = '';
       const url = h('input', { type: 'text', readOnly: true, value: r.url, class: 'mono', onclick: (e) => e.target.select() });
       created.append(h('div', { class: 'notice' },
