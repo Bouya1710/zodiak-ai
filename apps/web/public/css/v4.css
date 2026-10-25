@@ -62,3 +62,4 @@ input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px rgba(54, 217, 
 canvas.sk { background: linear-gradient(110deg, #141414 35%, #1d1d1d 50%, #141414 65%) 0 0 / 250% 100%; animation: sk 1.8s linear infinite; }
 @keyframes sk { to { background-position: -150% 0; } }
 @media (prefers-reduced-motion: reduce) { canvas.sk { animation: none; } }
+canvas.sk.sk-idle { animation: none; background: #141414; }

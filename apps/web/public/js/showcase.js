@@ -111,7 +111,10 @@ export function canvasFor(o) {
 const width = o.width || 360;
 const cv = h('canvas', { 'aria-hidden': 'true', class: 'sk', width: String(width), height: String(Math.round(width * (o.ratio || 1.25))) });
 const id = pickClip(o);
-if (id && !o.noVideo) loadShowcase().then((set) => { if (set.has(id)) setTimeout(() => swapToVideo(cv, id, null, o.hover), 0); });
+loadShowcase().then((set) => {
+  if (id && !o.noVideo && set.has(id)) setTimeout(() => swapToVideo(cv, id, null, o.hover), 0);
+  else cv.classList.add('sk-idle');
+});
 return cv;
 }
 
