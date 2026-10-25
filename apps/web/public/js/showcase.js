@@ -24,18 +24,25 @@ ready ||= fetch(`${BASE}manifest.json`, { cache: 'no-cache' }).then((r) => (r.ok
 return ready;
 }
 const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Safari en mode économie d'énergie refuse la lecture automatique : on relance les vidéos visibles au premier geste.
+const blocked = new Set();
+const tryPlay = (v) => v.play().then(() => blocked.delete(v)).catch(() => blocked.add(v));
+if (typeof document !== 'undefined') {
+  const retry = () => { for (const v of blocked) if (v.isConnected && v.dataset.visible) tryPlay(v); };
+  for (const ev of ['pointerdown', 'keydown', 'touchstart']) document.addEventListener(ev, retry, { passive: true, capture: true });
+}
 const vio = typeof IntersectionObserver === 'function'
 ? new IntersectionObserver((entries) => {
 for (const e of entries) {
 const v = e.target;
 if (e.isIntersecting) {
+v.dataset.visible = '1';
 if (!v.getAttribute('src')) v.src = v.dataset.src;
-if (!reduced && !v.dataset.hover) v.play().catch(() => {});
-} else if (!v.dataset.hover) v.pause();
+if (!reduced) tryPlay(v);
+} else { delete v.dataset.visible; v.pause(); }
 }
 }, { rootMargin: '200px' })
 : null;
-const canHover = typeof matchMedia === 'function' && matchMedia('(hover: hover)').matches;
 function swapToVideo(cv, id, opts, hover) {
 if (!cv.parentNode) return;
 const v = document.createElement('video');
@@ -44,18 +51,13 @@ v.defaultMuted = true;
 v.loop = true;
 v.playsInline = true;
 v.preload = 'none';
+v.autoplay = !reduced;
 v.poster = `${BASE}${id}.jpg`;
 v.dataset.src = `${BASE}${id}.mp4`;
 v.setAttribute('muted', '');
 v.setAttribute('playsinline', '');
 v.setAttribute('aria-hidden', 'true');
 v.className = cv.className;
-if (hover && canHover) {
-v.dataset.hover = '1';
-const host = cv.parentNode;
-host.addEventListener('mouseenter', () => { if (!reduced) v.play().catch(() => {}); });
-host.addEventListener('mouseleave', () => { v.pause(); v.currentTime = 0; });
-}
 v.addEventListener('error', () => {
 if (vio) vio.unobserve(v);
 if (v.parentNode) v.replaceWith(cv);
