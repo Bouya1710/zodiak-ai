@@ -72,3 +72,16 @@ canvas.sk.sk-idle { animation: none; background: #141414; }
 .engine:hover { border-color: var(--line-strong); }
 .engine[aria-checked=true] { border-color: var(--accent); background: var(--glass); }
 .engine[aria-checked=true] span { color: var(--accent); }
+/* Page Compte */
+.acct-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-bottom: 12px; }
+.acct-card { border: 1px solid var(--line); background: var(--slate-1); border-radius: 12px; padding: 16px; display: grid; gap: 8px; align-content: start; }
+.acct-card .label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--text-dim); font-weight: 700; }
+.acct-card .big { font-size: 1.8rem; font-weight: 900; }
+.ledger, .token-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 0.8rem; }
+.ledger li { display: grid; grid-template-columns: 1fr auto auto; gap: 12px; color: var(--text-dim); }
+.ledger time { font-size: 0.72rem; min-width: 7.5em; text-align: right; }
+.ledger .neg { color: var(--text); } .ledger .pos { color: var(--accent); }
+.token-list li { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; border-top: 1px solid var(--line); padding-top: 8px; }
+.acct .notice input.mono { display: block; width: 100%; margin: 8px 0; font-family: ui-monospace, Menlo, monospace; font-size: 0.75rem; }
+a.credits { text-decoration: none; }
+@media (max-width: 520px) { .token-list li { grid-template-columns: 1fr auto; } .token-list .hint { grid-column: 1 / -1; order: 3; } }

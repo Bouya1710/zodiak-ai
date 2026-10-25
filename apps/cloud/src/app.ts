@@ -6,14 +6,17 @@ import path from 'node:path';
 import { cloud, assertCloudEnv } from './env.ts';
 import * as supa from './supa.ts';
 import { sessionFrom, cookieFor, refreshProfile, type Session } from './session.ts';
-import { processJob, reconcile, ingest, backend } from './process.ts';
-import { isRemote } from './providers.ts';
+import { reconcile, ingest, backend } from './process.ts';
+import { createJob } from './jobs.ts';
 import { webhookSig, resultUrlFromWebhook } from './providers.ts';
 import { Router, RateLimiter, makeReq, send, type Req } from '../../api/src/http.ts';
 import { HttpError } from '../../api/src/ctx.ts';
 import { catalog } from '../../api/src/catalog.ts';
 import { NOTICES, checkPrompt, requireConsent } from '../../api/src/guardrails.ts';
-import { planJob, serializeJob } from '../../api/src/plan.ts';
+import { serializeJob } from '../../api/src/plan.ts';
+import { createToken, sessionFromToken } from './tokens.ts';
+import { handleRpc } from './mcp.ts';
+import { isOwner, ownerReport } from './admin.ts';
 import { serializeAsset, sniff } from '../../api/src/serialize.ts';
 import { probe } from '../../api/src/ffmpeg.ts';
 import { config } from '../../api/src/config.ts';
@@ -22,13 +25,6 @@ type Row = Record<string, any>;
 const limiter = new RateLimiter();
 const lim = (n: unknown, d = 30) => Math.min(100, Math.max(1, Number.parseInt(String(n ?? ''), 10) || d));
 const iso = () => new Date().toISOString();
-
-/** Lance un traitement en arrière-plan : `waitUntil` de Vercel (la fonction reste vivante jusqu'à la fin). */
-function background(p: Promise<unknown>): void {
-  const safe = p.catch((e) => console.error('[traitement]', e));
-  const ctx = (globalThis as any)[Symbol.for('@vercel/request-context')]?.get?.();
-  if (ctx?.waitUntil) ctx.waitUntil(safe);
-}
 
 interface CReq extends Req { s: Session | null; setSession: (s: Session) => void }
 const need = (r: CReq): Session => { if (!r.s) throw new HttpError(401, 'unauthorized', 'Connexion requise'); return r.s; };
@@ -81,30 +77,7 @@ function build(): Router {
   R.post('/api/jobs', guard(async (r) => {
     const s = need(r);
     if (!limiter.check(`job:${s.user.id}`, 40, 60_000)) throw new HttpError(429, 'rate_limited', 'Trop de demandes, patientez un instant');
-    const plan = await planJob({
-      asset: async (id) => (await supa.select('assets', { id: `eq.${id}`, select: '*' }, s.jwt))[0],
-      character: async (id) => (await supa.select('characters', { id: `eq.${id}`, select: '*' }, s.jwt))[0],
-      audit: async (event, detail) => { await supa.write('insert', 'audit_log', { user_id: s.user.id, event, detail }); },
-    }, await r.json());
-    // Plafond quotidien du site : protège la carte bancaire du propriétaire contre les abus.
-    if (isRemote(backend().id) && ['t2i', 'i2v', 't2v'].includes(plan.kind)) {
-      const spent = await supa.spentSince(new Date(Date.now() - 24 * 3600_000));
-      if (spent + plan.cost > cloud.dailyBudget) throw new HttpError(503, 'budget_reached', 'Le quota de génération du jour est atteint. Réessayez demain.');
-    }
-    if (cloud.creditsEnabled) await supa.credits(s.user.id, -plan.cost, 'job', plan.id);
-    let row: Row | null;
-    try {
-      row = await supa.write('insert', 'jobs', {
-        id: plan.id, user_id: s.user.id, kind: plan.kind, status: 'queued', prompt: plan.prompt, negative_prompt: plan.negative,
-        params: JSON.stringify(plan.params), preset_id: plan.presetId, template_id: plan.templateId, character_id: plan.characterId,
-        input_asset_id: plan.inputAssetId, audio_asset_id: plan.audioAssetId, backend: backend().id, cost: cloud.creditsEnabled ? plan.cost : 0,
-      });
-    } catch (e) {
-      if (cloud.creditsEnabled) await supa.credits(s.user.id, plan.cost, 'refund_error', plan.id).catch(() => {});
-      throw e;
-    }
-    background(processJob(s, row!));
-    send(r.res, 202, { job: serializeJob(row!) });
+    send(r.res, 202, { job: serializeJob(await createJob(s, await r.json())) });
     return undefined;
   }));
 
@@ -292,6 +265,49 @@ function build(): Router {
     const ledger = await supa.select('credit_ledger', { select: 'id,delta,reason,job_id,created_at', order: 'id.desc', limit: '50' }, s.jwt);
     return { balance: (await refreshProfile(s)).credits, creditsEnabled: cloud.creditsEnabled, ledger: ledger.map((l) => ({ id: l.id, delta: l.delta, reason: l.reason, jobId: l.job_id, createdAt: l.created_at })) };
   }));
+  // ---------- Suivi des dépenses (propriétaire du site)
+  R.get('/api/admin/usage', guard(async (r) => {
+    const s = need(r);
+    if (!isOwner(s)) throw new HttpError(403, 'forbidden', 'Réservé au propriétaire du site');
+    return ownerReport();
+  }));
+
+  // ---------- Clés de connecteur (MCP)
+  R.get('/api/tokens', guard(async (r) => {
+    const rows = await supa.select('api_tokens', { select: 'id,label,created_at,last_used_at', order: 'created_at.desc' }, need(r).jwt);
+    return { items: rows.map((t) => ({ id: t.id, label: t.label, createdAt: t.created_at, lastUsedAt: t.last_used_at })), owner: isOwner(need(r)) };
+  }));
+  R.post('/api/tokens', guard(async (r) => {
+    const s = need(r);
+    if (!limiter.check(`auth:${r.ip}`, 10, 60_000)) throw new HttpError(429, 'rate_limited', 'Trop de tentatives');
+    const b = await r.json();
+    if (typeof b.password !== 'string' || !b.password) throw new HttpError(422, 'invalid', 'Mot de passe requis');
+    if ((await supa.select('api_tokens', { select: 'id' }, s.jwt)).length >= 5) throw new HttpError(422, 'invalid', 'Maximum 5 clés : supprimez-en une');
+    const t = await createToken(s.user, b.password, typeof b.label === 'string' ? b.label.trim() : 'Claude');
+    send(r.res, 201, { id: t.id, token: t.token, url: `${cloud.publicUrl || `https://${r.raw.headers.host}`}/api/mcp/${t.token}` });
+    return undefined;
+  }));
+  R.delete('/api/tokens/:id', guard(async (r) => {
+    const s = need(r);
+    const t = (await supa.select('api_tokens', { id: `eq.${r.params.id}`, select: 'id' }, s.jwt))[0];
+    if (!t) throw new HttpError(404, 'not_found', 'Clé introuvable');
+    await supa.write('delete', 'api_tokens', {}, t.id);
+    return { ok: true };
+  }));
+
+  // ---------- Connecteur MCP (Claude) : clé dans l'URL ou en en-tête Authorization
+  const mcp = async (r: Req) => {
+    const key = r.params.token ?? String(r.raw.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
+    if (!limiter.check(`mcp:${r.ip}`, 120, 60_000)) throw new HttpError(429, 'rate_limited', 'Trop de demandes');
+    const s = await sessionFromToken(key);
+    const body = await r.json();
+    const out = Array.isArray(body) ? (await Promise.all(body.map((m) => handleRpc(s, m)))).filter(Boolean) : await handleRpc(s, body);
+    if (out === null || (Array.isArray(out) && !out.length)) { r.res.writeHead(202); r.res.end(); return undefined; }
+    return out;
+  };
+  R.post('/api/mcp', mcp);
+  R.post('/api/mcp/:token', mcp);
+
   R.post('/api/admin/credits', guard(async (r) => {
     const s = need(r);
     if (s.user.role !== 'admin') throw new HttpError(403, 'forbidden', 'Réservé aux administrateurs');
@@ -319,10 +335,10 @@ export async function handle(raw: http.IncomingMessage, res: http.ServerResponse
     if (!m) throw new HttpError(404, 'not_found', 'Route inconnue');
     if (m === 'method') throw new HttpError(405, 'invalid', 'Méthode non autorisée');
     r.params = m.params;
-    if (!['GET', 'HEAD'].includes(r.method) && !r.url.pathname.startsWith('/api/webhooks/') && raw.headers.origin) {
+    if (!['GET', 'HEAD'].includes(r.method) && !/^\/api\/(webhooks|mcp)(\/|$)/.test(r.url.pathname) && raw.headers.origin) {
       if (new URL(raw.headers.origin).host !== raw.headers.host) throw new HttpError(403, 'forbidden', 'Origine refusée');
     }
-    if (!r.url.pathname.startsWith('/api/webhooks/')) r.s = await sessionFrom(raw, res);
+    if (!/^\/api\/(webhooks|mcp)(\/|$)/.test(r.url.pathname)) r.s = await sessionFrom(raw, res);
     const out = await m.handler(r);
     if (out !== undefined && !res.headersSent) send(res, 200, out);
   } catch (e) {

@@ -9,6 +9,7 @@ const ROUTES = {
   '/personnages': { title: 'Personnages', load: () => import('./pages/characters.js') },
   '/outils': { title: 'Outils', load: () => import('./pages/tools.js') },
   '/tarifs': { title: 'Tarifs et crédits', load: () => import('./pages/pricing.js'), pub: true, full: true },
+  '/compte': { title: 'Mon compte', load: () => import('./pages/account.js') },
   '/connexion': { title: 'Connexion', load: () => import('./pages/login.js'), pub: true, full: true },
 };
 
@@ -31,7 +32,7 @@ for (const [href, label] of NAV) {
   nav.appendChild(a);
 }
 const pricing = h('a', { class: 'btn btn-small pricing-pill', href: '#/tarifs' }, '✦ Tarifs');
-const credits = h('span', { class: 'credits', title: 'Solde de crédits', hidden: true });
+const credits = h('a', { class: 'credits', href: '#/compte', title: 'Mon compte : crédits et connecteur Claude', hidden: true });
 const userEmail = h('span', { class: 'user-email', hidden: true });
 const loginBtn = h('a', { class: 'btn btn-small btn-ghost', href: '#/connexion' }, 'Connexion');
 const startBtn = h('a', { class: 'btn btn-small btn-primary', href: '#/studio' }, 'Créer');
