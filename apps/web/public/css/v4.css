@@ -113,3 +113,4 @@ a.credits { text-decoration: none; }
   .set-nav button { white-space: nowrap; }
   .conn-head { grid-template-columns: 44px 1fr; } .conn-head .btn { grid-column: 1 / -1; }
 }
+.set-layout > * { min-width: 0; }
