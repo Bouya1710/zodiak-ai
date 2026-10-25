@@ -110,6 +110,13 @@ export async function recover(email: string, redirectTo: string, challenge: stri
   });
   if (!res.ok && res.status !== 404) throw new SupaError(res.status, (await readError(res)).message);
 }
+/** Vérifie le jeton d'un lien e-mail (modèle « {{ .TokenHash }} ») et ouvre la session. */
+export async function verifyTokenHash(token_hash: string, type: 'recovery' | 'email'): Promise<Tokens | null> {
+  const res = await fetch(`${cloud.supabaseUrl}/auth/v1/verify`, { method: 'POST', headers: headers(undefined, { 'content-type': 'application/json' }), body: JSON.stringify({ type, token_hash }) });
+  if (!res.ok) return null;
+  const j = (await res.json()) as any;
+  return j.access_token && j.refresh_token ? { access_token: j.access_token, refresh_token: j.refresh_token } : null;
+}
 export const exchangeCode = (auth_code: string, code_verifier: string) => tokenCall('pkce', { auth_code, code_verifier });
 
 /** Change le mot de passe de l'utilisateur connecté. */

@@ -68,18 +68,15 @@ export function field(label, control, hint) {
 
 /** Marque originale : un anneau de douze points (cadran) traversé d'une constellation en étoile à quatre branches. */
 export function logo(size = 28) {
+  // Logo : « z » noir sur carré blanc arrondi, point cyan (choix du 26/10).
   const s = h('span', { class: 'logo-mark', 'aria-hidden': 'true' });
-  const dots = Array.from({ length: 12 }, (_, i) => {
-    const a = (i / 12) * Math.PI * 2 - Math.PI / 2;
-    return `<circle cx="${(16 + 13 * Math.cos(a)).toFixed(2)}" cy="${(16 + 13 * Math.sin(a)).toFixed(2)}" r="${i % 3 === 0 ? 1.5 : 1}" fill="var(--accent)"/>`;
-  }).join('');
-  s.innerHTML = `<svg width="${size}" height="${size}" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="16" cy="16" r="13" stroke="var(--line-strong)" stroke-width="1"/>
-    ${dots}
-    <path d="M16 6.5c.8 5.2 2.8 7.2 8 8-5.2.8-7.2 2.8-8 8-.8-5.2-2.8-7.2-8-8 5.2-.8 7.2-2.8 8-8z" fill="var(--slate-3)" stroke="var(--accent)" stroke-width="1.4" stroke-linejoin="round"/>
-    <circle cx="16" cy="14.5" r="1.1" fill="var(--ivory)"/>
-  </svg>`;
+  s.innerHTML = `<svg width="${size}" height="${size}" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><rect width="32" height="32" rx="8" fill="#f5f5f5"/><path d="M9 10.5h12.5v2.8l-8.4 7.4h8.6v2.8H8.8v-2.8l8.4-7.4H9z" fill="#0a0a0a"/><circle cx="25" cy="21.6" r="2.3" fill="#36d9e8"/></svg>`;
   return s;
+}
+
+/** Nom de marque : « zodiak » en minuscules, suivi du point cyan. */
+export function wordmark() {
+  return h('span', { class: 'brand-name' }, 'zodiak', h('i', { class: 'brand-dot', 'aria-hidden': 'true' }));
 }
 
 /**

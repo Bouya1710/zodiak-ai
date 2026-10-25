@@ -88,7 +88,15 @@ function build(): Router {
     const verifier = r.cookies.zodiak_pkce ?? '';
     const t = code && verifier ? await supa.exchangeCode(code, verifier) : null;
     const clear = `zodiak_pkce=; Path=/api/auth; HttpOnly; SameSite=Lax; Max-Age=0${cloud.secureCookies ? '; Secure' : ''}`;
-    r.res.writeHead(302, t ? { 'set-cookie': [cookieFor(t), clear], location: '/#/parametres?section=profil&nouveau-mdp=1' } : { 'set-cookie': clear, location: '/#/connexion?lien-expire=1' });
+    r.res.writeHead(302, t ? { 'set-cookie': [cookieFor(t), clear], location: '/#/parametres?section=securite&nouveau-mdp=1' } : { 'set-cookie': clear, location: '/#/connexion?lien-expire=1' });
+    r.res.end();
+    return undefined;
+  }));
+  // Lien d'e-mail sur notre domaine : /api/auth/confirm?token_hash=…&type=recovery (modèle Supabase personnalisé).
+  R.get('/api/auth/confirm', guard(async (r) => {
+    const type = r.query.get('type') === 'recovery' ? 'recovery' : 'email';
+    const t = await supa.verifyTokenHash(r.query.get('token_hash') ?? '', type);
+    r.res.writeHead(302, t ? { 'set-cookie': cookieFor(t), location: type === 'recovery' ? '/#/parametres?section=securite&nouveau-mdp=1' : '/#/studio' } : { location: '/#/connexion?lien-expire=1' });
     r.res.end();
     return undefined;
   }));
@@ -442,7 +450,7 @@ export async function handle(raw: http.IncomingMessage, res: http.ServerResponse
     if (!m) throw new HttpError(404, 'not_found', 'Route inconnue');
     if (m === 'method') throw new HttpError(405, 'invalid', 'Méthode non autorisée');
     r.params = m.params;
-    if (!['GET', 'HEAD'].includes(r.method) && !/^\/(api\/(webhooks|mcp|oauth)|\.well-known)(\/|$)/.test(r.url.pathname) && r.url.pathname !== '/api/auth/callback' && raw.headers.origin) {
+    if (!['GET', 'HEAD'].includes(r.method) && !/^\/(api\/(webhooks|mcp|oauth)|\.well-known)(\/|$)/.test(r.url.pathname) && !['/api/auth/callback', '/api/auth/confirm'].includes(r.url.pathname) && raw.headers.origin) {
       if (new URL(raw.headers.origin).host !== raw.headers.host) throw new HttpError(403, 'forbidden', 'Origine refusée');
     }
     if (!/^\/(api\/(webhooks|mcp|oauth)|\.well-known)(\/|$)/.test(r.url.pathname)) r.s = await sessionFrom(raw, res);

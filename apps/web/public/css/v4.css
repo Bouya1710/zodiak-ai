@@ -226,3 +226,7 @@ a.credits { text-decoration: none; }
   .profile-row { grid-template-columns: 1fr; justify-items: start; }
   .ledger-full li { grid-template-columns: 24px 1fr 56px; } .ledger-full time { grid-column: 2; grid-row: 2; text-align: left; }
 }
+/* Logo C : « zodiak » minuscules + point cyan */
+.brand-name { font-family: var(--font-body); font-weight: 800; letter-spacing: -0.03em; font-size: 1.25rem; text-transform: none; display: inline-flex; align-items: baseline; }
+.brand-dot { display: inline-block; width: 0.32em; height: 0.32em; border-radius: 50%; background: var(--accent); margin-left: 0.08em; }
+.logo-mark svg { display: block; }

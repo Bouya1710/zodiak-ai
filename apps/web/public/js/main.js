@@ -1,7 +1,7 @@
 import { returnTo } from './lib.js';
 /* Point d'entrée : en-tête, routage par hash, pied de page, barre mobile. */
 import { init, isMulti, logout, state, subscribe } from './state.js';
-import { clear, errorBox, h, logo } from './ui.js';
+import { clear, errorBox, h, logo, wordmark } from './ui.js';
 
 const ROUTES = {
   '/': { title: 'Créez images et vidéos par IA', load: () => import('./pages/home.js'), pub: true, full: true },
@@ -57,7 +57,7 @@ document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && acct.o
 const loginBtn = h('a', { class: 'btn btn-small btn-ghost', href: '#/connexion' }, 'Connexion');
 const startBtn = h('a', { class: 'btn btn-small btn-primary', href: '#/studio' }, 'Créer');
 const header = h('header', { class: 'site-header' },
-  h('a', { class: 'brand', href: '#/', 'aria-label': 'ZODIAK AI, accueil' }, logo(30), h('span', { class: 'brand-name' }, 'ZODIAK AI')),
+  h('a', { class: 'brand', href: '#/', 'aria-label': 'ZODIAK AI, accueil' }, logo(28), wordmark()),
   nav,
   h('div', { class: 'header-right' }, pricing, credits, loginBtn, startBtn, acct),
 );
@@ -66,7 +66,7 @@ const main = h('main', { id: 'main', class: 'main', tabindex: -1 });
 const col = (title, links) => h('div', {}, h('h4', {}, title), ...links.map(([href, t]) => h('a', { href }, t)));
 const footer = h('footer', { class: 'site-footer' },
   h('div', { class: 'foot-inner' },
-    h('div', {}, h('a', { class: 'brand', href: '#/' }, logo(26), h('span', { class: 'brand-name' }, 'ZODIAK AI')),
+    h('div', {}, h('a', { class: 'brand', href: '#/', 'aria-label': 'ZODIAK AI, accueil' }, logo(26), wordmark()),
       h('p', { style: 'margin-top:.8rem;max-width:32ch' }, `Plateforme libre de génération d'images et de vidéos par IA. Auto-hébergeable, licence Apache-2.0.`)),
     col('Créer', [['#/studio?tab=image', 'Texte vers image'], ['#/studio?tab=video', 'Image vers vidéo'], ['#/studio?tab=video&mode=t2v', 'Texte vers vidéo'], ['#/personnages', 'Personnages cohérents']]),
     col('Outils', [['#/outils', 'Agrandir (upscale)'], ['#/outils', 'Interpolation'], ['#/outils', 'Lip-sync'], ['#/outils', 'Montage et découpe']]),

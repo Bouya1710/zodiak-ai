@@ -109,12 +109,12 @@ export function consentPage(a: ReturnType<typeof authRequest>, email: string, qu
 <title>Autoriser ${esc(a.name)} - ZODIAK AI</title><link rel="icon" href="/favicon.svg"><style>
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0a0a0a;color:#f5f5f5;font:15px/1.5 Inter,system-ui,-apple-system,sans-serif;padding:16px}
 .c{width:min(440px,100%);background:#111;border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:28px}
-.b{display:flex;gap:10px;align-items:center;font-weight:900;letter-spacing:.08em;margin-bottom:22px}
+.b{display:flex;gap:10px;align-items:center;font-weight:800;font-size:1.25rem;letter-spacing:-.03em;margin-bottom:22px}.b i{display:inline-block;width:7px;height:7px;border-radius:50%;background:#36d9e8;margin-left:2px}
 h1{font-size:1.3rem;margin:0 0 6px}p{color:#9b9b9b;margin:0 0 14px}ul{margin:0 0 20px;padding-left:18px;color:#d0d0d0}
 .r{display:flex;gap:10px}button{flex:1;font:inherit;font-weight:700;border-radius:10px;padding:12px;cursor:pointer;border:1px solid rgba(255,255,255,.14)}
 .ok{background:#36d9e8;color:#051416;border-color:#36d9e8}.no{background:transparent;color:#f5f5f5}small{display:block;margin-top:14px;color:#777}
 </style></head><body><form class="c" method="post" action="/oauth/authorize?${esc(query)}">
-<div class="b"><img src="/favicon.svg" width="28" height="28" alt="">ZODIAK AI</div>
+<div class="b"><img src="/favicon.svg" width="28" height="28" alt="">zodiak<i></i></div>
 <h1>Autoriser ${esc(a.name)} ?</h1><p>Connecté en tant que <b>${esc(email)}</b>. ${esc(a.name)} pourra :</p>
 <ul><li>générer des images et des vidéos (débite vos crédits)</li><li>voir vos créations et suivre leur avancement</li><li>consulter votre solde de crédits</li></ul>
 <div class="r"><button class="no" name="decision" value="deny">Refuser</button><button class="ok" name="decision" value="allow">Autoriser</button></div>
