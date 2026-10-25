@@ -55,6 +55,22 @@ export async function credits(userId: string, delta: number, reason: string, job
 /** Crédits engagés par tous les utilisateurs depuis `since` (plafond quotidien). */
 export const spentSince = (since: Date) => rpc<number>('app_spent_since', { p_since: since.toISOString() });
 
+/** Nom affiché du profil (écrit par le serveur, fonction SQL app_profile). */
+export const setDisplayName = (userId: string, name: string) => rpc<Row>('app_profile', { p_user: userId, p_name: name });
+
+/** Déconnecte toutes les sessions de l'utilisateur (tous appareils, connecteurs compris). */
+export async function logoutAll(jwt: string): Promise<void> {
+  await fetch(`${cloud.supabaseUrl}/auth/v1/logout?scope=global`, { method: 'POST', headers: headers(jwt) }).catch(() => {});
+}
+
+/** Suppression définitive du compte et de ses fichiers (edge function delete-user). */
+export async function deleteUser(userId: string): Promise<void> {
+  const res = await fetch(`${cloud.supabaseUrl}/functions/v1/delete-user`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ secret: cloud.serverSecret, user_id: userId }),
+  });
+  if (!res.ok) throw new SupaError(res.status, `delete-user : ${(await res.text()).slice(0, 200)}`);
+}
+
 /** Nouvelle session indépendante pour un utilisateur, sans mot de passe (edge function mint-session). */
 export async function mintSession(userId: string): Promise<Tokens> {
   const res = await fetch(`${cloud.supabaseUrl}/functions/v1/mint-session`, {

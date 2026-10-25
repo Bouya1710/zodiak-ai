@@ -97,8 +97,8 @@ function syncHeader() {
   credits.textContent = state.user ? `${state.user.credits} crédits` : '';
   acct.hidden = !(authed && multi);
   if (state.user) {
-    avatar.textContent = state.user.email.slice(0, 1).toUpperCase();
-    menuEmail.textContent = state.user.email;
+    avatar.textContent = (state.user.name || state.user.email).trim().slice(0, 1).toUpperCase();
+    menuEmail.textContent = state.user.name ? `${state.user.name} · ${state.user.email}` : state.user.email;
     menuCredits.textContent = state.config && state.config.creditsEnabled ? `${state.user.credits} crédits` : '';
   }
   loginBtn.hidden = authed || !multi;

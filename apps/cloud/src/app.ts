@@ -99,6 +99,44 @@ function build(): Router {
     await supa.setPassword(s.jwt, b.password);
     return { ok: true };
   }));
+  // ---------- Profil et sécurité du compte
+  R.get('/api/profile', guard(async (r) => {
+    const s = need(r);
+    const p = (await supa.select('profiles', { select: '*', limit: '1' }, s.jwt))[0] ?? {};
+    const kinds = await supa.select('assets', { select: 'kind', origin: 'eq.generated', limit: '5000' }, s.jwt);
+    const tokens = await supa.select('api_tokens', { select: 'id' }, s.jwt);
+    return {
+      email: s.user.email, displayName: p.display_name ?? null, owner: isOwner(s), credits: s.user.credits, createdAt: p.created_at,
+      stats: { images: kinds.filter((k) => k.kind === 'image').length, videos: kinds.filter((k) => k.kind === 'video').length, connectors: tokens.length },
+    };
+  }));
+  R.patch('/api/profile', guard(async (r) => {
+    const s = need(r);
+    const b = await r.json();
+    const name = typeof b.displayName === 'string' ? b.displayName.trim().slice(0, 60) : '';
+    const chk = checkPrompt(name);
+    if (!chk.ok) throw new HttpError(422, 'invalid', 'Nom refusé');
+    const row = await supa.setDisplayName(s.user.id, name);
+    return { displayName: row?.display_name ?? null };
+  }));
+  R.post('/api/auth/logout-all', guard(async (r) => {
+    const s = need(r);
+    await supa.logoutAll(s.jwt);
+    for (const t of await supa.select('api_tokens', { select: 'id' }, s.jwt)) await supa.write('delete', 'api_tokens', {}, t.id);
+    r.res.setHeader('set-cookie', cookieFor(null));
+    return { ok: true };
+  }));
+  R.post('/api/account/delete', guard(async (r) => {
+    const s = need(r);
+    if (!limiter.check(`delete:${s.user.id}`, 3, 60 * 60_000)) throw new HttpError(429, 'rate_limited', 'Trop de tentatives');
+    const b = await r.json();
+    if (b.confirm !== 'SUPPRIMER') throw new HttpError(422, 'invalid', 'Tapez SUPPRIMER pour confirmer');
+    await supa.write('insert', 'audit_log', { user_id: s.user.id, event: 'account_deleted', detail: s.user.email.replace(/^(.).*@/, '$1***@') });
+    await supa.deleteUser(s.user.id);
+    r.res.setHeader('set-cookie', cookieFor(null));
+    return { ok: true };
+  }));
+
   R.post('/api/auth/logout', (r) => { r.res.setHeader('set-cookie', cookieFor(null)); return { ok: true }; });
   R.get('/api/auth/me', guard((r) => ({ user: need(r).user })));
 
@@ -390,7 +428,7 @@ function build(): Router {
 async function sessionFromTokens(access: string): Promise<Session> {
   const rows = await supa.select('profiles', { select: '*', limit: '1' }, access);
   const r = rows[0]!;
-  return { jwt: access, user: { id: r.id, email: r.email, role: r.role, credits: cloud.creditsEnabled ? Number(r.credits) : 0 } };
+  return { jwt: access, user: { id: r.id, email: r.email, role: r.role, credits: cloud.creditsEnabled ? Number(r.credits) : 0, name: r.display_name ?? null } };
 }
 
 let router: Router | null = null;

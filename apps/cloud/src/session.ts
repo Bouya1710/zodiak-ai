@@ -5,7 +5,7 @@ import { parseCookies } from '../../api/src/http.ts';
 
 export const COOKIE = 'zodiak_session';
 
-export interface User { id: string; email: string; role: 'user' | 'admin'; credits: number }
+export interface User { id: string; email: string; role: 'user' | 'admin'; credits: number; name?: string | null }
 export interface Session { user: User; jwt: string }
 
 const enc = (t: supa.Tokens) => Buffer.from(JSON.stringify({ a: t.access_token, r: t.refresh_token })).toString('base64url');
@@ -19,7 +19,7 @@ export function cookieFor(t: supa.Tokens | null): string {
   return t ? `${base}; Max-Age=${30 * 86400}` : `${base}; Max-Age=0`;
 }
 
-const toUser = (r: Record<string, any>): User => ({ id: r.id, email: r.email, role: r.role, credits: cloud.creditsEnabled ? Number(r.credits) : 0 });
+const toUser = (r: Record<string, any>): User => ({ id: r.id, email: r.email, role: r.role, credits: cloud.creditsEnabled ? Number(r.credits) : 0, name: r.display_name ?? null });
 
 async function profile(jwt: string): Promise<User | null> {
   try {
