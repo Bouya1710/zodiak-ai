@@ -53,17 +53,23 @@ function run(bin, args) {
   });
 }
 
-/** Étape 3 : télécharge, compresse en H.264 720p sans audio (cible 1 à 3 Mo) et extrait un poster JPEG. */
+/** Étape 3 : télécharge puis compresse (voir compressFile). */
 export async function compressClip(videoUrl, ffmpeg = process.env.FFMPEG_PATH || 'ffmpeg') {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'showcase-'));
-  const src = path.join(dir, 'src.mp4');
-  const mp4 = path.join(dir, 'clip.mp4');
-  const poster = path.join(dir, 'poster.jpg');
   const r = await fetch(videoUrl);
   if (!r.ok) throw new Error(`téléchargement vidéo : HTTP ${r.status}`);
+  const src = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'showcase-src-')), 'src.mp4');
   fs.writeFileSync(src, Buffer.from(await r.arrayBuffer()));
-  await run(ffmpeg, ['-y', '-i', src, '-vf', 'scale=-2:720:force_original_aspect_ratio=decrease', '-c:v', 'libx264', '-preset', 'slow', '-crf', '27', '-maxrate', '3500k', '-bufsize', '7000k', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', mp4]);
-  await run(ffmpeg, ['-y', '-ss', '1.5', '-i', mp4, '-frames:v', '1', '-q:v', '4', poster]);
+  return compressFile(src, ffmpeg);
+}
+
+/** Compresse un fichier local : H.264 sans audio, petit côté 720 px (lanczos), 24 i/s interpolées, poster JPEG à 1,5 s. */
+export async function compressFile(src, ffmpeg = process.env.FFMPEG_PATH || 'ffmpeg') {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'showcase-'));
+  const mp4 = path.join(dir, 'clip.mp4');
+  const poster = path.join(dir, 'poster.jpg');
+  const vf = "minterpolate=fps=24:mi_mode=mci:mc_mode=aobmc:vsbmc=1,scale='if(gt(iw,ih),-2,720)':'if(gt(iw,ih),720,-2)':flags=lanczos,unsharp=5:5:0.4";
+  await run(ffmpeg, ['-y', '-i', src, '-vf', vf, '-c:v', 'libx264', '-preset', 'slow', '-crf', '22', '-maxrate', '4000k', '-bufsize', '8000k', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', mp4]);
+  await run(ffmpeg, ['-y', '-ss', '1.5', '-i', mp4, '-frames:v', '1', '-q:v', '3', poster]);
   const out = { mp4: fs.readFileSync(mp4), poster: fs.readFileSync(poster), rawBytes: fs.statSync(src).size };
   fs.rmSync(dir, { recursive: true, force: true });
   return out;
