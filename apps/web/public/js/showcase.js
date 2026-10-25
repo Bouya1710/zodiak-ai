@@ -1,16 +1,17 @@
-import { art, camFor, stopArt } from './art.js';
+import { camFor } from './art.js';
 import { h } from './ui.js';
 const BASE = '/showcase/';
-const DEFAULT_CLIP = { aurora: 'c01', planet: 'c02', ocean: 'c03', city: 'c04', orbit: 'c14', tunnel: 'c13' };
-const CLIP_BY_CAM = { 'dolly-in': 'c05', 'dolly-out': 'c14', orbit: 'c06', 'crane-up': 'c07', 'drone-flyover': 'c08', handheld: 'c10', macro: 'c09', timelapse: 'c11', 'track-left': 'c04', 'track-right': 'c12', 'tilt-down': 'c03', 'wide-establishing': 'c01' };
+// Chaque emplacement montre une vraie vidéo de nos modèles (scripts/showcase-clips.mjs) ; en attendant, un bloc neutre.
+const DEFAULT_CLIP = { aurora: 'c12', planet: 'c03', ocean: 'c09', city: 'c05', orbit: 'c08', tunnel: 'c14' };
+const CLIP_BY_CAM = {
+  'dolly-in': 'c08', 'dolly-out': 'c05', 'track-left': 'c09', 'track-right': 'c06', 'pan-left': 'c18', 'pan-right': 'c17',
+  'tilt-up': 'c12', 'tilt-down': 'c15', orbit: 'c03', 'crane-up': 'c07', 'crane-down': 'c20', 'drone-flyover': 'c02',
+  handheld: 'c04', static: 'c16', macro: 'c10', 'wide-establishing': 'c12', 'hero-low': 'c13', 'top-down': 'c11',
+  'slow-motion': 'c19', timelapse: 'c11', 'rack-focus': 'c01', anamorphic: 'c14',
+};
 export const clipForCam = (id) => CLIP_BY_CAM[id];
-const SEED_CLIP = { 'aurora:47': 'c11' };
-const CAM_CLIP = { 'zoom-in': 'c05', 'zoom-out': 'c14', orbit: 'c06', 'crane-u': 'c07', fly: 'c08', shake: 'c10', macro: 'c09', fast: 'c11', 'pan-l': 'c04', 'pan-r': 'c12', 'tilt-d': 'c03' };
 function pickClip(o) {
-if (o.clip) return o.clip;
-if (SEED_CLIP[`${o.scene}:${o.seed}`]) return SEED_CLIP[`${o.scene}:${o.seed}`];
-if (o.width && o.width <= 220) return CAM_CLIP[o.cam] || null;
-return DEFAULT_CLIP[o.scene];
+  return o.clip || DEFAULT_CLIP[o.scene] || null;
 }
 if (typeof document !== 'undefined') {
 const st = document.createElement('style');
@@ -58,50 +59,59 @@ host.addEventListener('mouseleave', () => { v.pause(); v.currentTime = 0; });
 v.addEventListener('error', () => {
 if (vio) vio.unobserve(v);
 if (v.parentNode) v.replaceWith(cv);
-art(cv, opts);
 });
-stopArt(cv);
 cv.replaceWith(v);
 if (vio) vio.observe(v);
 }
 export const EXAMPLES = [
-  { t: `Aurore sur le fjord`, p: `Aurore boréale vert et violet au-dessus d'un fjord glacé, survol lent en drone`, scene: 'aurora', seed: 11, clip: 'c01', kind: 'video', cam: 'zoom-in', ratio: 1.45 },
-  { t: `Planète à anneaux`, p: `Géante gazeuse cuivrée, anneaux fins, lune en orbite, orbite lente`, scene: 'planet', seed: 21, clip: 'c02', kind: 'video', cam: 'orbit', ratio: 1.0 },
-  { t: `Soleil de minuit`, p: `Coucher de soleil sur un océan calme, panoramique vertical vers l'eau`, scene: 'ocean', seed: 5, clip: 'c03', kind: 'video', cam: 'tilt-d', ratio: 0.8 },
-  { t: `Néons sous la pluie`, p: `Rue futuriste sous la pluie, néons magenta et cyan, travelling latéral`, scene: 'city', seed: 33, clip: 'c04', kind: 'video', cam: 'pan-l', ratio: 1.3 },
-  { t: `Heure dorée`, p: `Portrait à contre-jour à l'heure dorée, lent travelling avant`, scene: 'orbit', seed: 8, clip: 'c05', kind: 'video', cam: 'zoom-in', ratio: 1.7 },
-  { t: `Sneaker de studio`, p: `Produit sur piédestal sombre, orbite à 180 degrés, lumière rasante`, scene: 'tunnel', seed: 14, clip: 'c06', kind: 'video', cam: 'orbit', ratio: 1.2 },
-  { t: `Cascade en forêt`, p: `Chute d'eau en forêt, brume, mouvement de grue ascendant`, scene: 'aurora', seed: 47, clip: 'c07', kind: 'video', cam: 'tilt-u', ratio: 1.7 },
-  { t: `Dunes au vent`, p: `Dunes du désert à l'aube, survol en drone, sable soulevé par le vent`, scene: 'planet', seed: 62, clip: 'c08', kind: 'video', cam: 'pan-r', ratio: 1.3 },
-  { t: `Café en macro`, p: `Gros plan macro sur un café fumant, vapeur et crème en mouvement`, scene: 'ocean', seed: 19, clip: 'c09', kind: 'video', cam: 'macro', ratio: 0.75 },
-  { t: `Astronaute`, p: `Astronaute sur une planète rouge, caméra à l'épaule, poussière`, scene: 'city', seed: 58, clip: 'c10', kind: 'video', cam: 'shake', ratio: 1.7 },
-  { t: `Nuages accélérés`, p: `Accéléré de nuages sur une chaîne enneigée au coucher du soleil`, scene: 'orbit', seed: 29, clip: 'c11', kind: 'video', cam: 'fast', ratio: 1.2 },
-  { t: `Marché de nuit`, p: `Marché nocturne guirlandes et vapeur, travelling vers la droite`, scene: 'tunnel', seed: 37, clip: 'c12', kind: 'video', cam: 'pan-r', ratio: 0.85 },
+  { t: 'Kickflip au couchant', p: 'Skateur en plein kickflip sur une dalle vide au coucher du soleil, zoom choc', clip: 'c01', kind: 'video', ratio: 0.5625 },
+  { t: 'Canyon en FPV', p: 'Moto tout-terrain dans un canyon rouge, drone FPV en poursuite', clip: 'c02', kind: 'video', ratio: 0.5625 },
+  { t: 'Danse dans la lumière', p: 'Danseuse en robe blanche dans un entrepôt, orbite autour d’elle', clip: 'c03', kind: 'video', ratio: 1.78 },
+  { t: 'Dernier round', p: 'Boxeur dans une vieille salle, caméra à l’épaule, coups vers l’objectif', clip: 'c04', kind: 'video', ratio: 0.5625 },
+  { t: 'Défilé sous la pluie', p: 'Mannequin en manteau noir sous la pluie, néons, travelling arrière', clip: 'c05', kind: 'video', ratio: 1.78 },
+  { t: 'Drift de nuit', p: 'Voiture noire en drift sur piste mouillée, fumée, travelling latéral', clip: 'c06', kind: 'video', ratio: 0.5625 },
+  { t: 'Ruines de jungle', p: 'Petit robot explorateur dans un temple envahi par la jungle, grue ascendante', clip: 'c07', kind: 'video', ratio: 0.5625 },
+  { t: 'Toit à l’heure dorée', p: 'Portrait au vent sur un toit à contre-jour, lent travelling avant', clip: 'c08', kind: 'video', ratio: 1.78 },
+  { t: 'Dans le tube', p: 'Surfeur dans une vague turquoise, travelling dans le tube', clip: 'c09', kind: 'video', ratio: 0.5625 },
+  { t: 'Flambé', p: 'Chef qui flambe une poêle, très gros plan au ralenti', clip: 'c10', kind: 'video', ratio: 0.5625 },
+  { t: 'Immobile dans la foule', p: 'Carrefour de nuit vu du ciel, une silhouette immobile, accéléré', clip: 'c11', kind: 'video', ratio: 0.5625 },
+  { t: 'Sortie du hangar', p: 'Astronaute quittant un hangar géant sur une planète glacée, plan d’ensemble', clip: 'c12', kind: 'video', ratio: 0.5625 },
+  { t: 'Dunk au crépuscule', p: 'Dunk en contre-plongée au ralenti sur un terrain extérieur', clip: 'c13', kind: 'video', ratio: 0.5625 },
+  { t: 'Tunnel orange', p: 'Moto lancée dans un tunnel de lumières orange, look anamorphique', clip: 'c14', kind: 'video', ratio: 0.5625 },
+  { t: 'Porte du château', p: 'Chevalier sous la pluie devant la porte, torches, recul lent', clip: 'c15', kind: 'video', ratio: 0.5625 },
+  { t: 'Solo sur scène', p: 'Guitariste dans la fumée, lumières de scène, plan fixe', clip: 'c16', kind: 'video', ratio: 1.78 },
+  { t: 'Galop à l’aube', p: 'Cheval au galop sur la plage à l’aube, ralenti', clip: 'c17', kind: 'video', ratio: 0.5625 },
+  { t: 'Ruelle aux lanternes', p: 'À vélo dans une ruelle de lanternes, caméra qui suit', clip: 'c18', kind: 'video', ratio: 1.78 },
+  { t: 'Éclat de verre', p: 'Flacon de verre et gouttes qui explosent, ultra ralenti', clip: 'c19', kind: 'video', ratio: 1.78 },
+  { t: 'Saut en poudreuse', p: 'Snowboardeur qui s’envole d’une crête, drone en suivi', clip: 'c20', kind: 'video', ratio: 0.5625 },
 ];
 
 export const TOOLS = [
-  { clip: 'c01', t: 'Texte vers image', d: `Décrivez, générez, déclinez en un clic.`, tag: 'Image', href: '#/studio?tab=image', scene: 'aurora', seed: 3, cam: 'zoom-in' },
-  { clip: 'c02', t: 'Image vers vidéo', d: `Animez une image avec un mouvement de caméra.`, tag: 'Vidéo', href: '#/studio?tab=video', scene: 'planet', seed: 4, cam: 'orbit' },
-  { clip: 'c03', t: 'Texte vers vidéo', d: `Un prompt, une scène animée.`, tag: 'Vidéo', href: '#/studio?tab=video&mode=t2v', scene: 'ocean', seed: 6, cam: 'tilt-d' },
-  { clip: 'c13', t: 'Presets de caméra', d: `22 mouvements et cadrages prêts à l'emploi.`, tag: 'Caméra', href: '#/studio?tab=video', scene: 'tunnel', seed: 9, cam: 'zoom-in' },
-  { clip: 'c05', t: 'Personnages cohérents', d: `Gardez le même visage d'un plan à l'autre.`, tag: 'Personnages', href: '#/personnages', scene: 'orbit', seed: 12, cam: 'spin' },
-  { clip: 'c10', t: 'Lip-sync', d: `Associez une voix à une vidéo.`, tag: 'Audio', href: '#/outils', scene: 'city', seed: 15, cam: 'pan-r' },
-  { clip: 'c08', t: 'Agrandir et fluidifier', d: `Upscale x2 ou x4, interpolation des images.`, tag: 'Qualité', href: '#/outils', scene: 'planet', seed: 18, cam: 'zoom-out' },
-  { clip: 'c14', t: 'Modèles de prompt', d: `Des structures éprouvées, à compléter.`, tag: 'Templates', href: '#/studio?tab=image', scene: 'aurora', seed: 24, cam: 'pan-l' },
+  { clip: 'c08', t: 'Texte vers image', d: 'Décrivez, générez, déclinez en un clic.', tag: 'Image', href: '#/studio?tab=image' },
+  { clip: 'c03', t: 'Image vers vidéo', d: 'Animez une image avec un mouvement de caméra.', tag: 'Vidéo', href: '#/studio?tab=video' },
+  { clip: 'c12', t: 'Texte vers vidéo', d: 'Un prompt, une scène animée.', tag: 'Vidéo', href: '#/studio?tab=video&mode=t2v' },
+  { clip: 'c01', t: 'Presets de caméra', d: '22 mouvements et cadrages prêts à l’emploi.', tag: 'Caméra', href: '#/studio?tab=video' },
+  { clip: 'c05', t: 'Personnages cohérents', d: 'Gardez le même visage d’un plan à l’autre.', tag: 'Personnages', href: '#/personnages' },
+  { clip: 'c16', t: 'Lip-sync', d: 'Associez une voix à une vidéo.', tag: 'Audio', href: '#/outils' },
+  { clip: 'c19', t: 'Agrandir et fluidifier', d: 'Upscale x2 ou x4, interpolation des images.', tag: 'Qualité', href: '#/outils' },
+  { clip: 'c14', t: 'Modèles de prompt', d: 'Des structures éprouvées, à compléter.', tag: 'Templates', href: '#/studio?tab=image' },
 ];
 
+// Mur de presets : 20 mouvements, chacun avec sa propre vidéo.
 export const CAM_DEMOS = [
-['dolly-in', 'Travelling avant'], ['dolly-out', 'Recul progressif'], ['orbit', 'Orbite'], ['crane-up', 'Grue ascendante'],
-['track-left', 'Travelling gauche'], ['tilt-down', 'Panoramique bas'], ['drone-flyover', 'Survol drone'], ['handheld', `Caméra à l'épaule`],
-['macro', 'Très gros plan'], ['timelapse', 'Accéléré'], ['track-right', 'Travelling droite'], ['wide-establishing', 'Plan large'],
+  ['rack-focus', 'Zoom choc'], ['drone-flyover', 'Drone FPV'], ['orbit', 'Orbite 360'], ['handheld', 'Caméra à l’épaule'],
+  ['dolly-out', 'Travelling arrière'], ['track-right', 'Travelling latéral'], ['crane-up', 'Grue ascendante'], ['dolly-in', 'Travelling avant'],
+  ['track-left', 'Suivi latéral'], ['macro', 'Très gros plan'], ['top-down', 'Plongée verticale'], ['tilt-up', 'Plan d’ensemble'],
+  ['hero-low', 'Contre-plongée'], ['anamorphic', 'Anamorphique'], ['tilt-down', 'Recul révélateur'], ['static', 'Plan fixe'],
+  ['pan-right', 'Panoramique'], ['pan-left', 'Caméra qui suit'], ['slow-motion', 'Ultra ralenti'], ['crane-down', 'Drone en suivi'],
 ];
 
-/** Toile animée prête à insérer. */
+/** Emplacement média : bloc neutre remplacé par la vidéo dès qu'elle est publiée. */
 export function canvasFor(o) {
-const opts = { scene: o.scene, seed: o.seed, cam: o.cam || 'static', ratio: o.ratio || 1.25, width: o.width || 360, speed: o.speed || 1, still: o.still };
-const cv = art(h('canvas', { 'aria-hidden': 'true' }), opts);
+const width = o.width || 360;
+const cv = h('canvas', { 'aria-hidden': 'true', class: 'sk', width: String(width), height: String(Math.round(width * (o.ratio || 1.25))) });
 const id = pickClip(o);
-if (id && !o.noVideo) loadShowcase().then((set) => { if (set.has(id)) setTimeout(() => swapToVideo(cv, id, opts, o.hover), 0); });
+if (id && !o.noVideo) loadShowcase().then((set) => { if (set.has(id)) setTimeout(() => swapToVideo(cv, id, null, o.hover), 0); });
 return cv;
 }
 

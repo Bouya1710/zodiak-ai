@@ -280,7 +280,7 @@ export function mount(root, qs) {
     h('h2', {}, 'Créez des vidéos en un clic'),
     h('p', { class: 'lede' }, '22 presets de caméra et de mouvement, ou le réglage libre pour tout contrôler à la main.'),
     h('div', { class: 'steps' },
-      ...[['Ajouter une image', 'Téléversez-la ou générez-la d\'abord pour démarrer l\'animation.', 'planet', 21, 'orbit', 'c02'], ['Choisir un preset', 'Un mouvement de caméra pilote le mouvement de l\'image.', 'tunnel', 14, 'zoom-in', 'c13'], ['Obtenir la vidéo', 'Lancez : la vidéo animée apparaît ici, en direct.', 'city', 33, 'pan-r', 'c04']]
+      ...[['Ajouter une image', 'Téléversez-la ou générez-la d\'abord pour démarrer l\'animation.', 'planet', 21, 'orbit', 'c08'], ['Choisir un preset', 'Un mouvement de caméra pilote le mouvement de l\'image.', 'tunnel', 14, 'zoom-in', 'c03'], ['Obtenir la vidéo', 'Lancez : la vidéo animée apparaît ici, en direct.', 'city', 33, 'pan-r', 'c06']]
         .map(([t, d, sc, sd, cm, cl]) => h('div', { class: 'step' }, canvasFor({ scene: sc, seed: sd, cam: cm, ratio: 0.75, width: 420, clip: cl, hover: true }), h('b', {}, t), h('span', {}, d)))),
     h('div', { class: 'how-foot' }, h('b', {}, 'Pas d\'idée pour commencer ?'), h('a', { href: '#/' }, 'Parcourez les créations de la page Explorer')));
   const history = h('div', { class: 'asset-grid' });

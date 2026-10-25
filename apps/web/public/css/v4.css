@@ -34,3 +34,31 @@
   .promo-body { align-self: stretch; display: flex; flex-direction: column; padding: 18px; }
   .promo-body .btn { margin-top: auto; align-self: stretch; }
 }
+/* Palette v4 : noir neutre + un seul accent cyan uni, sans dégradé ni halo (choix du 25/10). */
+:root {
+  --ink: #0a0a0a; --slate-1: #111111; --slate-2: #161616; --slate-3: #1e1e1e; --slate-4: #2a2a2a;
+  --line: rgba(255, 255, 255, 0.07); --line-strong: rgba(255, 255, 255, 0.14);
+  --text: #f5f5f5; --text-dim: #9b9b9b;
+  --accent: #36d9e8; --accent-2: #36d9e8; --accent-strong: #7de8f2; --accent-ink: #051416;
+  --star: #36d9e8; --grad: #36d9e8; --glass: rgba(54, 217, 232, 0.08);
+}
+.site-header { background: rgba(10, 10, 10, 0.94); }
+.btn-primary, .btn-primary:hover:not(:disabled), .gen-bar .btn-primary { background: var(--accent); color: var(--accent-ink); box-shadow: none; }
+.btn-primary:hover:not(:disabled) { background: var(--accent-strong); transform: none; }
+.nav a[aria-current=page] { background: transparent; color: var(--accent); }
+.seg[aria-checked=true] { background: var(--slate-4); color: var(--text); }
+.grad, .bb-title b { background: none; -webkit-background-clip: initial; background-clip: initial; color: var(--accent); }
+.tabbar a.go b { background: var(--accent); box-shadow: none; }
+.credits { color: var(--text); border-color: var(--line-strong); background: var(--slate-2); }
+.plan .flag { background: var(--accent); }
+.bb-eyebrow, .model-card b, .eyebrow { color: var(--accent); }
+.tile:first-child { background: var(--slate-2); }
+.how { background: var(--slate-1); }
+.plan.p-cyan { background: linear-gradient(180deg, rgba(54, 217, 232, 0.12), var(--slate-1) 55%); }
+.plan, .plan.p-pink, .plan.p-blue { background-color: var(--slate-1); }
+.btn-pink { background: #ff4f8b; }
+input:focus, select:focus, textarea:focus { box-shadow: 0 0 0 3px rgba(54, 217, 232, 0.2); }
+/* Emplacement média en attente de sa vidéo : bloc neutre animé, comme un chargement. */
+canvas.sk { background: linear-gradient(110deg, #141414 35%, #1d1d1d 50%, #141414 65%) 0 0 / 250% 100%; animation: sk 1.8s linear infinite; }
+@keyframes sk { to { background-position: -150% 0; } }
+@media (prefers-reduced-motion: reduce) { canvas.sk { animation: none; } }
