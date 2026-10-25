@@ -1,0 +1,36 @@
+# Démarrage : `docker compose up`  →  http://localhost:8080  (mode personnel, backend mock, aucun GPU)
+# GPU local : `docker compose --profile gpu up` avec GENERATION_BACKEND=comfyui dans .env
+services:
+  zodiak:
+    build: .
+    image: zodiak:local
+    ports:
+      - "${PORT:-8080}:8080"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      PORT: "8080"
+      COMFYUI_URL: "${COMFYUI_URL:-http://comfyui:8188}"
+    volumes:
+      - zodiak-data:/data
+    restart: unless-stopped
+
+  comfyui:
+    profiles: ["gpu"]
+    build: docker/comfyui
+    volumes:
+      - ${MODELS_DIR:-./models}:/comfyui/models
+      - comfyui-output:/comfyui/output
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    restart: unless-stopped
+
+volumes:
+  zodiak-data:
+  comfyui-output:

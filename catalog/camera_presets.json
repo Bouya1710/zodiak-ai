@@ -1,0 +1,200 @@
+[
+  {
+    "id": "dolly-in",
+    "label": "Travelling avant lent",
+    "category": "Mouvement",
+    "description": "La caméra avance doucement vers le sujet.",
+    "promptFragment": "slow dolly in towards the subject, smooth steady camera push-in",
+    "negativeFragment": "jitter, warped geometry, flicker",
+    "motion": "zoom_in"
+  },
+  {
+    "id": "dolly-out",
+    "label": "Recul progressif",
+    "category": "Mouvement",
+    "description": "La caméra s'éloigne et dévoile le décor.",
+    "promptFragment": "slow dolly out, camera pulls back revealing the surroundings",
+    "negativeFragment": "jitter, warped geometry, flicker",
+    "motion": "zoom_out"
+  },
+  {
+    "id": "track-left",
+    "label": "Travelling latéral gauche",
+    "category": "Mouvement",
+    "description": "La caméra glisse vers la gauche, parallèle au sujet.",
+    "promptFragment": "lateral tracking shot moving left, camera slides sideways parallel to the subject",
+    "negativeFragment": "jitter, warped geometry, flicker",
+    "motion": "pan_left"
+  },
+  {
+    "id": "track-right",
+    "label": "Travelling latéral droit",
+    "category": "Mouvement",
+    "description": "La caméra glisse vers la droite.",
+    "promptFragment": "lateral tracking shot moving right, camera slides sideways parallel to the subject",
+    "negativeFragment": "jitter, warped geometry, flicker",
+    "motion": "pan_right"
+  },
+  {
+    "id": "pan-left",
+    "label": "Panoramique gauche",
+    "category": "Mouvement",
+    "description": "Rotation de la caméra vers la gauche sur son axe.",
+    "promptFragment": "smooth pan left, camera rotates horizontally on a tripod",
+    "negativeFragment": "jitter, warped geometry, flicker",
+    "motion": "pan_left"
+  },
+  {
+    "id": "pan-right",
+    "label": "Panoramique droit",
+    "category": "Mouvement",
+    "description": "Rotation de la caméra vers la droite sur son axe.",
+    "promptFragment": "smooth pan right, camera rotates horizontally on a tripod",
+    "negativeFragment": "jitter, warped geometry, flicker",
+    "motion": "pan_right"
+  },
+  {
+    "id": "tilt-up",
+    "label": "Panoramique vertical haut",
+    "category": "Mouvement",
+    "description": "La caméra bascule vers le haut.",
+    "promptFragment": "tilt up, camera angles upward revealing the sky",
+    "negativeFragment": "jitter, warped geometry, flicker",
+    "motion": "tilt_up"
+  },
+  {
+    "id": "tilt-down",
+    "label": "Panoramique vertical bas",
+    "category": "Mouvement",
+    "description": "La caméra bascule vers le bas.",
+    "promptFragment": "tilt down, camera angles downward",
+    "negativeFragment": "jitter, warped geometry, flicker",
+    "motion": "tilt_down"
+  },
+  {
+    "id": "orbit",
+    "label": "Orbite autour du sujet",
+    "category": "Mouvement",
+    "description": "La caméra tourne autour du sujet.",
+    "promptFragment": "orbiting shot, camera circles around the subject, parallax on the background",
+    "negativeFragment": "jitter, warped geometry, flicker",
+    "motion": "orbit"
+  },
+  {
+    "id": "crane-up",
+    "label": "Grue ascendante",
+    "category": "Mouvement",
+    "description": "La caméra s'élève au-dessus de la scène.",
+    "promptFragment": "crane shot rising upward, camera ascends above the scene",
+    "negativeFragment": "jitter, warped geometry, flicker",
+    "motion": "rise"
+  },
+  {
+    "id": "crane-down",
+    "label": "Grue descendante",
+    "category": "Mouvement",
+    "description": "La caméra descend vers le sujet.",
+    "promptFragment": "crane shot descending, camera lowers toward the subject",
+    "negativeFragment": "jitter, warped geometry, flicker",
+    "motion": "fall"
+  },
+  {
+    "id": "drone-flyover",
+    "label": "Survol drone",
+    "category": "Mouvement",
+    "description": "Vue aérienne qui avance au-dessus du paysage.",
+    "promptFragment": "aerial drone shot flying forward over the landscape, high altitude, smooth motion",
+    "negativeFragment": "jitter, warped geometry, flicker",
+    "motion": "zoom_in"
+  },
+  {
+    "id": "handheld",
+    "label": "Caméra à l'épaule",
+    "category": "Mouvement",
+    "description": "Léger tremblement réaliste, ambiance documentaire.",
+    "promptFragment": "handheld camera, subtle natural shake, documentary feel",
+    "negativeFragment": "jitter, warped geometry, flicker",
+    "motion": "static"
+  },
+  {
+    "id": "static",
+    "label": "Plan fixe",
+    "category": "Mouvement",
+    "description": "Aucun mouvement de caméra, le sujet seul bouge.",
+    "promptFragment": "locked-off static camera on a tripod, no camera movement",
+    "negativeFragment": "jitter, warped geometry, flicker",
+    "motion": "static"
+  },
+  {
+    "id": "macro",
+    "label": "Très gros plan",
+    "category": "Cadrage",
+    "description": "Détails du sujet, faible profondeur de champ.",
+    "promptFragment": "extreme close-up macro shot, shallow depth of field, fine details",
+    "negativeFragment": "",
+    "motion": "zoom_in"
+  },
+  {
+    "id": "wide-establishing",
+    "label": "Plan d'ensemble",
+    "category": "Cadrage",
+    "description": "Plan large qui situe la scène.",
+    "promptFragment": "wide establishing shot, the whole scene visible, cinematic composition",
+    "negativeFragment": "",
+    "motion": "static"
+  },
+  {
+    "id": "hero-low",
+    "label": "Contre-plongée héroïque",
+    "category": "Cadrage",
+    "description": "Caméra basse, sujet imposant.",
+    "promptFragment": "low angle hero shot looking up at the subject, dramatic sky",
+    "negativeFragment": "",
+    "motion": "tilt_up"
+  },
+  {
+    "id": "top-down",
+    "label": "Plongée verticale",
+    "category": "Cadrage",
+    "description": "Vue de dessus à 90°.",
+    "promptFragment": "top-down overhead shot, camera looking straight down",
+    "negativeFragment": "",
+    "motion": "static"
+  },
+  {
+    "id": "slow-motion",
+    "label": "Ralenti",
+    "category": "Rythme",
+    "description": "Mouvement ralenti et fluide.",
+    "promptFragment": "slow motion, high frame rate look, graceful fluid movement",
+    "negativeFragment": "",
+    "motion": "zoom_in"
+  },
+  {
+    "id": "timelapse",
+    "label": "Accéléré",
+    "category": "Rythme",
+    "description": "Le temps s'écoule vite (nuages, lumière).",
+    "promptFragment": "time-lapse, clouds and light changing rapidly",
+    "negativeFragment": "",
+    "motion": "static"
+  },
+  {
+    "id": "rack-focus",
+    "label": "Changement de netteté",
+    "category": "Optique",
+    "description": "La mise au point passe du premier plan à l'arrière-plan.",
+    "promptFragment": "rack focus, focus shifts from foreground to background",
+    "negativeFragment": "",
+    "motion": "zoom_in"
+  },
+  {
+    "id": "anamorphic",
+    "label": "Look anamorphique",
+    "category": "Optique",
+    "description": "Reflets horizontaux et flou ovale.",
+    "promptFragment": "anamorphic lens look, horizontal flares, oval bokeh, cinematic widescreen",
+    "negativeFragment": "",
+    "motion": "static"
+  }
+]

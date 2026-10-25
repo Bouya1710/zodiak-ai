@@ -1,0 +1,50 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": null,
+  "installCommand": "npm install --no-audit --no-fund",
+  "buildCommand": "node scripts/unpack.mjs && node scripts/build-cloud.mjs",
+  "outputDirectory": "apps/web/public",
+  "rewrites": [
+    {
+      "source": "/showcase/:path*",
+      "destination": "https://wlrjpgtjizegehhwelgh.supabase.co/storage/v1/object/public/showcase/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/index"
+    }
+  ],
+  "functions": {
+    "api/index.js": {
+      "maxDuration": 300,
+      "includeFiles": "{cloud-dist/**,catalog/**,workflows/**,node_modules/ffmpeg-static/**}"
+    },
+    "api/showcase-gen.js": {
+      "maxDuration": 300,
+      "includeFiles": "{scripts/showcase-*.mjs,node_modules/ffmpeg-static/**}"
+    }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "same-origin"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; img-src 'self' data: blob: https://*.supabase.co; media-src 'self' blob: https://*.supabase.co; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; frame-ancestors 'none'"
+        }
+      ]
+    }
+  ]
+}

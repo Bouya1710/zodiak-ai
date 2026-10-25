@@ -1,0 +1,17 @@
+{
+  "name": "zodiak-ai",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "ZODIAK AI : plateforme libre de génération d'images et de vidéos par IA",
+  "license": "Apache-2.0",
+  "engines": { "node": "22.x" },
+  "scripts": {
+    "build": "node scripts/build-cloud.mjs",
+    "start": "node apps/api/src/server.ts",
+    "test": "bash scripts/test.sh"
+  },
+  "dependencies": {
+    "ffmpeg-static": "5.2.0"
+  }
+}

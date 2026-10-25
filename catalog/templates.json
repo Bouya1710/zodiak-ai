@@ -1,0 +1,150 @@
+[
+  {
+    "id": "portrait-cine",
+    "label": "Portrait cinéma",
+    "kind": "t2i",
+    "description": "Portrait éclairé comme un plan de film.",
+    "promptTemplate": "Cinematic portrait of {sujet}, soft key light, shallow depth of field, film grain, 85mm lens, natural skin texture",
+    "variables": [
+      {
+        "name": "sujet",
+        "label": "Sujet",
+        "placeholder": "une marinière aux cheveux argentés"
+      }
+    ],
+    "defaults": {
+      "sizeId": "portrait"
+    }
+  },
+  {
+    "id": "produit-studio",
+    "label": "Produit en studio",
+    "kind": "t2i",
+    "description": "Packshot propre sur fond uni.",
+    "promptTemplate": "Studio product photograph of {produit} on a {fond} seamless background, softbox lighting, crisp reflections, high detail",
+    "variables": [
+      {
+        "name": "produit",
+        "label": "Produit",
+        "placeholder": "une bouteille en verre ambré"
+      },
+      {
+        "name": "fond",
+        "label": "Fond",
+        "placeholder": "gris perle"
+      }
+    ],
+    "defaults": {
+      "sizeId": "square"
+    }
+  },
+  {
+    "id": "paysage-brume",
+    "label": "Paysage brumeux",
+    "kind": "t2i",
+    "description": "Grand paysage atmosphérique.",
+    "promptTemplate": "Misty landscape of {lieu} at {moment}, volumetric light, layers of fog, painterly realism, wide angle",
+    "variables": [
+      {
+        "name": "lieu",
+        "label": "Lieu",
+        "placeholder": "une vallée de montagne"
+      },
+      {
+        "name": "moment",
+        "label": "Moment",
+        "placeholder": "l'aube"
+      }
+    ],
+    "defaults": {
+      "sizeId": "landscape"
+    }
+  },
+  {
+    "id": "portrait-anime",
+    "label": "Portrait qui prend vie",
+    "kind": "i2v",
+    "description": "Anime doucement une image de portrait.",
+    "promptTemplate": "The subject {action}, subtle natural motion, hair and clothing moving in a light breeze, eyes alive",
+    "variables": [
+      {
+        "name": "action",
+        "label": "Action",
+        "placeholder": "sourit et tourne légèrement la tête"
+      }
+    ],
+    "defaults": {
+      "duration": 5
+    }
+  },
+  {
+    "id": "revelation-produit",
+    "label": "Révélation de produit",
+    "kind": "i2v",
+    "description": "Rotation douce autour d'un produit.",
+    "promptTemplate": "The {produit} slowly rotates on a pedestal, light sweeping across its surface, elegant product reveal",
+    "variables": [
+      {
+        "name": "produit",
+        "label": "Produit",
+        "placeholder": "montre de luxe"
+      }
+    ],
+    "defaults": {
+      "duration": 5
+    }
+  },
+  {
+    "id": "ville-pluie",
+    "label": "Ville sous la pluie",
+    "kind": "t2v",
+    "description": "Rue nocturne, néons et reflets.",
+    "promptTemplate": "A rain-soaked {ville} street at night, neon reflections on wet asphalt, steam rising, people with umbrellas walking, cinematic",
+    "variables": [
+      {
+        "name": "ville",
+        "label": "Ville",
+        "placeholder": "tokyoïte"
+      }
+    ],
+    "defaults": {
+      "sizeId": "landscape",
+      "duration": 5
+    }
+  },
+  {
+    "id": "drone-cote",
+    "label": "Survol de côte",
+    "kind": "t2v",
+    "description": "Plan aérien le long d'une côte.",
+    "promptTemplate": "Aerial view flying along a {cote} coastline, waves breaking on rocks, golden hour light, smooth drone movement",
+    "variables": [
+      {
+        "name": "cote",
+        "label": "Côte",
+        "placeholder": "méditerranéenne"
+      }
+    ],
+    "defaults": {
+      "sizeId": "landscape",
+      "duration": 5
+    }
+  },
+  {
+    "id": "marche-perso",
+    "label": "Personnage qui marche",
+    "kind": "i2v",
+    "description": "Fait marcher le personnage de l'image.",
+    "promptTemplate": "The character walks forward {lieu}, natural walking cycle, camera follows at a steady distance",
+    "variables": [
+      {
+        "name": "lieu",
+        "label": "Lieu",
+        "placeholder": "dans une ruelle pavée"
+      }
+    ],
+    "defaults": {
+      "duration": 5
+    }
+  }
+]

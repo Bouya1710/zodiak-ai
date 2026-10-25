@@ -1,0 +1,47 @@
+{
+  "_meta": {
+    "id": "upscale_esrgan_image",
+    "version": 1,
+    "models": [
+      "RealESRGAN_x4plus.pth"
+    ],
+    "minVramGb": 4,
+    "status": "non ex\u00e9cut\u00e9 sur GPU pendant le d\u00e9veloppement",
+    "requires": []
+  },
+  "1": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "{{image}}"
+    }
+  },
+  "2": {
+    "class_type": "UpscaleModelLoader",
+    "inputs": {
+      "model_name": "RealESRGAN_x4plus.pth"
+    }
+  },
+  "3": {
+    "class_type": "ImageUpscaleWithModel",
+    "inputs": {
+      "upscale_model": [
+        "2",
+        0
+      ],
+      "image": [
+        "1",
+        0
+      ]
+    }
+  },
+  "4": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": [
+        "3",
+        0
+      ],
+      "filename_prefix": "zodiak/upscale"
+    }
+  }
+}

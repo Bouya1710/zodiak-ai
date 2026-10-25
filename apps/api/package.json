@@ -1,0 +1,16 @@
+{
+  "name": "@zodiak/api",
+  "version": "0.1.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "description": "API, worker et serveur statique de ZODIAK AI. Aucune dépendance npm : Node 22 natif, SQLite intégré, ffmpeg.",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "start": "node src/server.ts",
+    "worker": "node src/worker.ts",
+    "dev": "node --watch src/server.ts",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "bash ../../scripts/test.sh"
+  }
+}

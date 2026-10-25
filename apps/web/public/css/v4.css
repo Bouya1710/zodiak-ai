@@ -1,0 +1,36 @@
+/* v4 : passe 2 de comparaison avec la référence (docs/ECARTS.md). Chargé après v3.css. */
+/* En-tête mobile : .credits existe toujours (masqué) ; on teste sa visibilité. */
+@media (max-width: 820px) {
+  .header-right:not(:has(.credits:not([hidden]))) .btn-primary { display: inline-flex; }
+  .header-right:not(:has(.credits:not([hidden]))) .pricing-pill { display: inline-flex; }
+}
+@media (max-width: 430px) {
+  .site-header:not(:has(.credits:not([hidden]))) .brand-name { display: inline; font-size: 0.95rem; }
+  .header-right:not(:has(.credits:not([hidden]))) .btn-ghost { display: none; }
+}
+/* Studio : le sélecteur de mode était écrasé à 2 px (lignes de grille auto + overflow hidden). */
+.side-scroll { grid-auto-rows: max-content; grid-template-columns: minmax(0, 1fr); }
+.side-scroll > * { order: 3; }
+.side-scroll > .tabs { order: 0; }
+.side-scroll > .model-card { order: 1; min-height: 142px; }
+.studio-side > .side-scroll > .segmented { order: 2; display: grid; grid-template-columns: 1fr 1fr; border-radius: 10px; background: var(--slate-2); border: 1px solid var(--line); padding: 3px; gap: 3px; }
+.studio-side > .side-scroll > .segmented[hidden] { display: none; }
+.studio-side > .side-scroll > .segmented .seg { min-height: 30px; font-size: 0.75rem; border: 0; border-radius: 7px; background: transparent; }
+.studio-side > .side-scroll > .segmented .seg[aria-checked=true] { background: var(--slate-4); color: var(--text); font-weight: 600; }
+.studio-side .asset-field { justify-items: center; text-align: center; padding: 22px 10px 16px; gap: 6px; }
+.studio-side .asset-field > .label { font-weight: 700; font-size: 0.8125rem; }
+.studio-side .asset-field > .label::before { content: '▣  ♪  ▶'; display: block; letter-spacing: 0.4em; color: var(--text-dim); font-size: 0.8rem; margin-bottom: 10px; }
+.studio-side .asset-field .asset-preview { font-size: 0.72rem; justify-content: center; }
+.studio-side .asset-field .btn-row { display: grid; grid-template-columns: 1fr 1fr; width: 100%; gap: 6px; }
+.studio-side .asset-field .btn-row .btn { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.72rem; padding: 0.25rem 0.4rem; justify-content: center; }
+.studio-side .asset-field .btn-row .btn[hidden] { display: none; }
+.size-chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.size-chip { justify-content: center; font-size: 0.72rem; padding: 0.35rem 0.3rem; }
+.main-top .notice { flex: 0 1 640px; min-width: 0; margin: 0 0 0 auto; font-size: 0.64rem; line-height: 1.35; padding: 4px 10px; }
+/* Accueil mobile : deux cartes visibles, bouton promo en bas. */
+@media (max-width: 520px) {
+  .feat-row { grid-auto-columns: 62%; }
+  .feat-card strong { font-size: 0.72rem; }
+  .promo-body { align-self: stretch; display: flex; flex-direction: column; padding: 18px; }
+  .promo-body .btn { margin-top: auto; align-self: stretch; }
+}

@@ -1,0 +1,5 @@
+{
+  "t2i": 1, "i2v": 10, "t2v": 10, "upscale": 2, "interpolate": 3, "lipsync": 8, "concat": 1, "trim": 1,
+  "draftFactor": 0.4,
+  "note": "Crédits internes (aucun paiement). Ordre de grandeur : 1 crédit ≈ une image ; voir docs/COUTS.md pour les coûts réels."
+}

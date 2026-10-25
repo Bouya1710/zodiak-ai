@@ -1,0 +1,6 @@
+[
+  { "id": "square", "label": "Carré", "width": 1024, "height": 1024, "video": { "width": 768, "height": 768, "draft": { "width": 480, "height": 480 } } },
+  { "id": "landscape", "label": "Paysage 16:9", "width": 1344, "height": 768, "video": { "width": 1280, "height": 704, "draft": { "width": 832, "height": 480 } } },
+  { "id": "portrait", "label": "Portrait 9:16", "width": 768, "height": 1344, "video": { "width": 704, "height": 1280, "draft": { "width": 480, "height": 832 } } },
+  { "id": "cinema", "label": "Cinéma 21:9", "width": 1536, "height": 640, "video": { "width": 1280, "height": 544, "draft": { "width": 832, "height": 352 } } }
+]

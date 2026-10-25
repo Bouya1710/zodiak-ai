@@ -1,0 +1,6 @@
+[
+  { "id": "flux1-schnell", "kind": "image", "name": "FLUX.1 [schnell]", "license": "Apache-2.0", "commercial": true, "minVramGb": 12 },
+  { "id": "wan22-ti2v-5b", "kind": "video", "name": "Wan 2.2 TI2V-5B", "license": "Apache-2.0", "commercial": true, "minVramGb": 12 },
+  { "id": "real-esrgan", "kind": "tool", "name": "Real-ESRGAN x4", "license": "BSD-3-Clause", "commercial": true, "minVramGb": 4 },
+  { "id": "ffmpeg", "kind": "tool", "name": "ffmpeg (montage, upscale vidéo, interpolation)", "license": "LGPL/GPL selon build", "commercial": true, "minVramGb": 0 }
+]

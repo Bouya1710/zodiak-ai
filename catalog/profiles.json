@@ -1,0 +1,5 @@
+{
+  "vram12": { "image_workflow": "t2i_flux_schnell_gguf", "flux_unet": "flux1-schnell-Q4_K_S.gguf", "wan_unet": "wan2.2_ti2v_5B_fp16.safetensors", "note": "FLUX GGUF Q4 (nœud ComfyUI-GGUF requis) + Wan 5B FP16" },
+  "vram16": { "image_workflow": "t2i_flux_schnell_fp8", "flux_ckpt": "flux1-schnell-fp8.safetensors", "wan_unet": "wan2.2_ti2v_5B_fp16.safetensors", "note": "FLUX FP8 + Wan 5B FP16" },
+  "vram24": { "image_workflow": "t2i_flux_schnell_fp8", "flux_ckpt": "flux1-schnell-fp8.safetensors", "wan_unet": "wan2.2_ti2v_5B_fp16.safetensors", "note": "FLUX FP8 + Wan 5B FP16 (cible officielle Wan 5B)" }
+}

@@ -1,0 +1,7 @@
+{
+  "name": "@zodiak-ai/cloud",
+  "private": true,
+  "type": "module",
+  "description": "Couche serverless de ZODIAK AI (Vercel + Supabase)",
+  "scripts": { "typecheck": "tsc -p tsconfig.json" }
+}

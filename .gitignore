@@ -1,0 +1,17 @@
+data/
+models/
+.env
+node_modules/
+
+cloud-dist/
+.vercel/
+.showcase-token
+showcase-out/
+showcase-run.log
+# interne, jamais publié
+_archive/
+docs/ux-ref/
+docs/HANDOFF-V1.md
+CLAUDE.md
+.DS_Store
+.showcase-token.sha256
