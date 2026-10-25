@@ -7,8 +7,9 @@ import type { Session } from './session.ts';
 export const isOwner = (s: Session) => s.user.role === 'admin' || (!!cloud.adminEmail && s.user.email === cloud.adminEmail);
 
 export async function falBalance(): Promise<{ balance: number; currency: string } | { error: string }> {
-  const key = process.env.FAL_KEY;
-  if (!key) return { error: 'FAL_KEY absente' };
+  // Le solde n'est lisible qu'avec une clé fal de portée « Admin » (la clé de génération est refusée).
+  const key = process.env.FAL_ADMIN_KEY;
+  if (!key) return { error: 'ajoutez FAL_ADMIN_KEY (clé fal « Admin ») dans Vercel' };
   try {
     const r = await fetch('https://api.fal.ai/v1/account/billing?expand=credits', { headers: { authorization: `Key ${key}` }, signal: AbortSignal.timeout(8000) });
     const j = (await r.json().catch(() => ({}))) as any;

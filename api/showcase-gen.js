@@ -42,10 +42,6 @@ export default async function handler(req, res) {
         await lib.upload(up, token, `${clip.id}.jpg`, poster);
         return send(res, 200, { id: clip.id, bytes: mp4.length, posterBytes: poster.length, rawBytes });
       }
-      case 'balance': { // contrôle de l'accès au solde fal (API Platform)
-        const r = await fetch('https://api.fal.ai/v1/account/billing?expand=credits', { headers: { authorization: `Key ${key}` } });
-        return send(res, 200, { status: r.status, body: (await r.text()).slice(0, 300) });
-      }
       case 'manifest': {
         const ids = body.ids ?? [];
         const m = { version: VERSION, models: MODELS, generatedAt: new Date().toISOString(), costUsd: +(ids.length * COST_PER_CLIP).toFixed(2),
