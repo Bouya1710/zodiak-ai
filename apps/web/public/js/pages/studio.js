@@ -26,6 +26,10 @@ export function mount(root, qs) {
   let sizeId = cat.sizes[0] ? cat.sizes[0].id : 'square';
   let duration = 4;
   let view = 'results';
+  const engines = cat.engines || [];
+  const engineSel = { image: null, video: null };
+  const enginesFor = () => engines.filter((e) => e.kinds.includes(kindNow()));
+  const engineNow = () => { const list = enginesFor(); return list.find((e) => e.id === engineSel[tab]) || list[0] || null; };
   const kindNow = () => (tab === 'image' ? 't2i' : vmode === 't2v' ? 't2v' : 'i2v');
 
   /* ----- champs ----- */
@@ -50,11 +54,20 @@ export function mount(root, qs) {
   const modelName = h('b', {});
   const modelSub = h('span', {});
   const modelCanvasBox = h('div', { class: 'model-card' });
+  const enginePick = h('div', { class: 'engine-pick', role: 'radiogroup', 'aria-label': 'Modèle', hidden: true });
   function renderModel() {
     const kind = tab === 'image' ? 'image' : 'video';
     const m = cat.models.find((x) => x.kind === kind);
-    modelName.textContent = tab === 'image' ? 'Texte vers image' : vmode === 't2v' ? 'Texte vers vidéo' : 'Image vers vidéo';
-    modelSub.textContent = `${m ? m.name : 'Modèle'} · moteur ${cfg.backend === 'mock' ? 'de démonstration' : cfg.backend}`;
+    const e = engineNow();
+    modelName.textContent = e ? e.name : tab === 'image' ? 'Texte vers image' : vmode === 't2v' ? 'Texte vers vidéo' : 'Image vers vidéo';
+    modelSub.textContent = e ? `${e.vendor} · ✦ ${e.credits} crédit${e.credits > 1 ? 's' : ''}` : `${m ? m.name : 'Modèle'} · moteur ${cfg.backend === 'mock' ? 'de démonstration' : cfg.backend}`;
+    clear(enginePick);
+    const list = enginesFor();
+    enginePick.hidden = list.length < 2;
+    for (const x of list) {
+      enginePick.appendChild(h('button', { type: 'button', role: 'radio', class: 'engine', 'aria-checked': String(x.id === (e && e.id)), onclick: () => { engineSel[tab] = x.id; renderModel(); updateCost(); } },
+        h('b', {}, x.name), h('span', {}, `${x.tag ? `${x.tag} · ` : ''}✦ ${x.credits}`)));
+    }
     clear(modelCanvasBox);
     modelCanvasBox.append(canvasFor({ scene: tab === 'image' ? 'aurora' : 'planet', seed: tab === 'image' ? 3 : 21, cam: tab === 'image' ? 'pan-l' : 'orbit', ratio: 0.3, width: 400 }), h('div', {}, modelName, modelSub));
   }
@@ -183,7 +196,7 @@ export function mount(root, qs) {
   const formatBox = h('div', { class: 'panel-box' }, h('span', { class: 'label' }, 'Format'), sizeBox);
   const durBoxWrap = h('div', { class: 'panel-box' }, h('span', { class: 'label' }, 'Durée'), durBox, h('div', { class: 'check' }, draft, h('label', { for: draft.id }, 'Brouillon (480p, plus rapide et moins cher)')));
   const advBox = h('details', { class: 'panel-box collapsible' }, h('summary', {}, 'Réglages avancés'), h('div', { class: 'stack', style: 'margin-top:.6rem' }, field('Personnage', charSel), field('Graine (seed)', seed, 'Vide : graine aléatoire.')));
-  const side = h('div', { class: 'side-scroll' }, tabsEl, modeEl, modelCanvasBox, refBox, promptBox, formatBox, durBoxWrap, cameraBox, advBox, err);
+  const side = h('div', { class: 'side-scroll' }, tabsEl, modeEl, modelCanvasBox, enginePick, refBox, promptBox, formatBox, durBoxWrap, cameraBox, advBox, err);
   const genBar = h('div', { class: 'gen-bar' }, h('div', { class: 'gen-row' }, countSel, submit));
   const form = h('form', { class: 'studio-side', novalidate: true }, side, genBar);
 
@@ -195,8 +208,9 @@ export function mount(root, qs) {
   }
   function costNow() {
     const k = kindNow();
-    let c = cat.costs[k] || 1;
-    if (tab === 'video' && draft.checked) c = Math.max(1, Math.ceil(c * 0.4));
+    const e = engineNow();
+    let c = e ? e.credits : cat.costs[k] || 1;
+    if (!e && tab === 'video' && draft.checked) c = Math.max(1, Math.ceil(c * 0.4));
     return c * Number(countSel.value || 1);
   }
   function updateCost() {
@@ -229,6 +243,8 @@ export function mount(root, qs) {
     const kind = kindNow();
     const base = { kind, params: { sizeId } };
     if (tab === 'video') { base.params.duration = duration; base.params.draft = draft.checked; }
+    const eng = engineNow();
+    if (eng) base.params.engine = eng.id;
     if (template) { base.templateId = template.id; base.params.variables = { ...tplValues }; }
     else {
       const p = prompt.value.trim();

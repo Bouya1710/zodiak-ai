@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { config } from './config.ts';
-import { catalog, costFor, renderTemplate, resolveDims, JOB_KINDS, type JobKind } from './catalog.ts';
+import { catalog, costFor, engineFor, renderTemplate, resolveDims, JOB_KINDS, type JobKind } from './catalog.ts';
 import { checkPrompt, requireConsent } from './guardrails.ts';
 import { HttpError } from './ctx.ts';
 import type { Row } from './db.ts';
@@ -159,6 +159,12 @@ export async function planJob(deps: PlanDeps, body: Record<string, any>): Promis
     params.duration = num(params.duration, 2, 5, 5);
     params.fps = Math.round(num(params.fps, 8, 30, 24));
   }
+
+  // Modèle de génération (catalogue engines.json) : son coût remplace le barème générique.
+  if (config.backend === 'fal' && (kind === 't2i' || isVideo)) {
+    const engine = engineFor(kind, params.engine);
+    if (engine) params.engine = engine.id; else delete params.engine;
+  } else delete params.engine;
 
   const cost = costFor(kind, params);
   return { id: crypto.randomUUID(), kind, prompt, negative, params, presetId, templateId, characterId: character?.id ?? null, inputAssetId, audioAssetId, cost };

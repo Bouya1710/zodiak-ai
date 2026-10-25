@@ -52,6 +52,9 @@ export async function credits(userId: string, delta: number, reason: string, job
   }
 }
 
+/** Crédits engagés par tous les utilisateurs depuis `since` (plafond quotidien). */
+export const spentSince = (since: Date) => rpc<number>('app_spent_since', { p_since: since.toISOString() });
+
 // ---------- Auth (Supabase Auth)
 export interface Tokens { access_token: string; refresh_token: string }
 

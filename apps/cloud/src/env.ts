@@ -17,6 +17,8 @@ export const cloud = {
   secureCookies: bool(e.SECURE_COOKIES, true),
   publicUrl: (e.PUBLIC_URL ?? (e.VERCEL_PROJECT_PRODUCTION_URL ? `https://${e.VERCEL_PROJECT_PRODUCTION_URL}` : '')).replace(/\/$/, ''),
   jobTimeoutMs: 8 * 60_000,
+  /** Plafond de crédits engagés sur 24 h pour tout le site (1 crédit ≈ 0,01 $ chez fal). */
+  dailyBudget: int(e.DAILY_BUDGET_CREDITS, 500),
 };
 
 export function assertCloudEnv(): void {

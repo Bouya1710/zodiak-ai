@@ -63,3 +63,12 @@ canvas.sk { background: linear-gradient(110deg, #141414 35%, #1d1d1d 50%, #14141
 @keyframes sk { to { background-position: -150% 0; } }
 @media (prefers-reduced-motion: reduce) { canvas.sk { animation: none; } }
 canvas.sk.sk-idle { animation: none; background: #141414; }
+/* Choix du modèle (FLUX, Nano Banana, Wan, Kling…) sous la carte modèle. */
+.side-scroll > .engine-pick { order: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.side-scroll > .engine-pick[hidden] { display: none; }
+.engine { font: inherit; text-align: left; cursor: pointer; display: grid; gap: 1px; padding: 8px 10px; border-radius: 9px; border: 1px solid var(--line); background: var(--slate-2); color: var(--text); }
+.engine b { font-size: 0.78rem; font-weight: 700; }
+.engine span { font-size: 0.68rem; color: var(--text-dim); }
+.engine:hover { border-color: var(--line-strong); }
+.engine[aria-checked=true] { border-color: var(--accent); background: var(--glass); }
+.engine[aria-checked=true] span { color: var(--accent); }

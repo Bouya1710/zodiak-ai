@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { cloud } from './env.ts';
-import { catalog } from '../../api/src/catalog.ts';
+import { catalog, engineFor } from '../../api/src/catalog.ts';
 import { loadWorkflow, renderWorkflow, injectLora } from '../../api/src/workflows.ts';
 import { workflowFor, wanLength } from '../../api/src/backends/comfyui.ts';
 import { config } from '../../api/src/config.ts';
@@ -18,11 +18,35 @@ export const webhookSig = (jobId: string) => crypto.createHmac('sha256', cloud.s
 const hookUrl = (provider: string, jobId: string) =>
   cloud.publicUrl ? `${cloud.publicUrl}/api/webhooks/${provider}?job=${jobId}&sig=${webhookSig(jobId)}` : '';
 
-const FAL_MODELS: Record<string, string> = {
-  t2i: process.env.FAL_MODEL_T2I ?? 'fal-ai/flux/schnell',
-  i2v: process.env.FAL_MODEL_I2V ?? 'fal-ai/wan/v2.2-5b/image-to-video',
-  t2v: process.env.FAL_MODEL_T2V ?? 'fal-ai/wan/v2.2-5b/text-to-video',
+const ratio = (w: number, h: number, allowed: string[]) => {
+  const r = w / h;
+  return allowed.map((a) => [a, Math.abs(Math.log(r / (Number(a.split(':')[0]) / Number(a.split(':')[1]))))] as const).sort((x, y) => x[1] - y[1])[0]![0];
 };
+
+/** Corps de requête fal propre à chaque modèle (schémas lus sur fal.ai/models/<id>/api). */
+export function falBody(engineId: string, kind: string, req: { prompt: string; negative: string }, p: Record<string, any>, imageUrl: string | null): Record<string, unknown> {
+  const w = Number(p.width) || 1024, h = Number(p.height) || 1024;
+  switch (engineId) {
+    case 'flux-schnell':
+      return { prompt: req.prompt, seed: p.seed, image_size: { width: w, height: h }, num_inference_steps: 4, enable_safety_checker: true };
+    case 'nano-banana':
+      return { prompt: req.prompt, seed: p.seed, num_images: 1, output_format: 'jpeg', aspect_ratio: ratio(w, h, ['21:9', '16:9', '3:2', '4:3', '5:4', '1:1', '4:5', '3:4', '2:3', '9:16']) };
+    case 'kling-25': {
+      const body: Record<string, unknown> = { prompt: req.prompt, duration: '5', ...(req.negative ? { negative_prompt: req.negative } : {}) };
+      if (kind === 'i2v') body.image_url = imageUrl;
+      else body.aspect_ratio = ratio(w, h, ['16:9', '9:16', '1:1']);
+      return body;
+    }
+    default: { // wan-22
+      const body: Record<string, unknown> = {
+        prompt: req.prompt, seed: p.seed, resolution: p.draft ? '480p' : '720p', num_frames: 81, frames_per_second: 16,
+        aspect_ratio: ratio(w, h, ['16:9', '9:16', '1:1']), enable_safety_checker: true, ...(req.negative ? { negative_prompt: req.negative } : {}),
+      };
+      if (kind === 'i2v') body.image_url = imageUrl;
+      return body;
+    }
+  }
+}
 
 export async function submitRemote(provider: string, job: Row, o: { character?: Row; inputPath: string | null; jobId: string }): Promise<{ ref: string; urls: Record<string, string> }> {
   const hook = hookUrl(provider, o.jobId);
@@ -35,10 +59,17 @@ export async function submitRemote(provider: string, job: Row, o: { character?: 
   if (provider === 'fal') {
     const key = process.env.FAL_KEY;
     if (!key) throw new Error('FAL_KEY manquante');
-    const body: Record<string, unknown> = { prompt: req.prompt, seed: p.seed };
-    if (job.kind === 't2i') body.image_size = { width: p.width, height: p.height };
-    if (o.inputPath) body.image_url = `data:image/png;base64,${fs.readFileSync(o.inputPath).toString('base64')}`;
-    const url = `https://queue.fal.run/${FAL_MODELS[job.kind]}${hook ? `?fal_webhook=${encodeURIComponent(hook)}` : ''}`;
+    const engine = engineFor(job.kind, p.engine);
+    const endpoint = engine?.endpoints[job.kind as 't2i'];
+    if (!engine || !endpoint) throw new Error(`Aucun modèle fal pour ${job.kind}`);
+    let imageUrl: string | null = null;
+    if (o.inputPath) {
+      const buf = fs.readFileSync(o.inputPath);
+      const mime = buf[0] === 0xff ? 'image/jpeg' : buf[0] === 0x52 ? 'image/webp' : 'image/png';
+      imageUrl = `data:${mime};base64,${buf.toString('base64')}`;
+    }
+    const body = falBody(engine.id, job.kind, req, p, imageUrl);
+    const url = `https://queue.fal.run/${endpoint}${hook ? `?fal_webhook=${encodeURIComponent(hook)}` : ''}`;
     const res = await fetch(url, { method: 'POST', headers: { authorization: `Key ${key}`, 'content-type': 'application/json' }, body: JSON.stringify(body) });
     const j = (await res.json()) as any;
     if (!res.ok || !j.status_url) throw new Error(`fal : ${JSON.stringify(j).slice(0, 200)}`);

@@ -7,6 +7,8 @@ export const JOB_KINDS: JobKind[] = ['t2i', 'i2v', 't2v', 'upscale', 'interpolat
 
 export interface SizeDef { id: string; label: string; width: number; height: number; video: { width: number; height: number; draft: { width: number; height: number } } }
 export interface CameraPreset { id: string; label: string; category: string; description: string; promptFragment: string; negativeFragment?: string; motion: string }
+// Modèle de génération distant (fal) : 1 crédit ≈ 0,01 $ de coût fournisseur.
+export interface Engine { id: string; kinds: JobKind[]; name: string; vendor: string; tag?: string; credits: number; endpoints: Partial<Record<JobKind, string>>; note?: string }
 export interface Template { id: string; label: string; kind: 't2i' | 'i2v' | 't2v'; description: string; promptTemplate: string; variables: { name: string; label: string; placeholder: string }[]; defaults: Record<string, unknown> }
 
 function readJson<T>(dir: string, file: string): T {
@@ -20,6 +22,7 @@ export interface Catalog {
   presets: CameraPreset[];
   templates: Template[];
   profiles: Record<string, Record<string, string>>;
+  engines: Engine[];
 }
 
 export function loadCatalog(dir = config.catalogDir): Catalog {
@@ -30,12 +33,23 @@ export function loadCatalog(dir = config.catalogDir): Catalog {
     presets: readJson(dir, 'camera_presets.json'),
     templates: readJson(dir, 'templates.json'),
     profiles: readJson(dir, 'profiles.json'),
+    engines: fs.existsSync(path.join(dir, 'engines.json')) ? readJson(dir, 'engines.json') : [],
   };
 }
 
 export const catalog: Catalog = loadCatalog();
 
+/** Modèle choisi pour ce type de job (le premier du catalogue par défaut), ou null si aucun. */
+export function engineFor(kind: JobKind, id: unknown, c: Catalog = catalog): Engine | null {
+  const list = c.engines.filter((e) => e.kinds.includes(kind));
+  return list.find((e) => e.id === id) ?? list[0] ?? null;
+}
+
 export function costFor(kind: JobKind, params: Record<string, unknown>, c: Catalog = catalog): number {
+  if (typeof params.engine === 'string') {
+    const e = engineFor(kind, params.engine, c);
+    if (e) return e.credits;
+  }
   const base = Number(c.costs[kind] ?? 1);
   const draft = (kind === 'i2v' || kind === 't2v') && params.draft === true;
   return Math.max(1, Math.ceil(base * (draft ? Number(c.costs.draftFactor ?? 0.4) : 1)));

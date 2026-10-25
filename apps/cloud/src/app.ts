@@ -7,6 +7,7 @@ import { cloud, assertCloudEnv } from './env.ts';
 import * as supa from './supa.ts';
 import { sessionFrom, cookieFor, refreshProfile, type Session } from './session.ts';
 import { processJob, reconcile, ingest, backend } from './process.ts';
+import { isRemote } from './providers.ts';
 import { webhookSig, resultUrlFromWebhook } from './providers.ts';
 import { Router, RateLimiter, makeReq, send, type Req } from '../../api/src/http.ts';
 import { HttpError } from '../../api/src/ctx.ts';
@@ -46,6 +47,7 @@ function build(): Router {
   R.get('/api/catalog', () => ({
     models: catalog.models, cameraPresets: catalog.presets, templates: catalog.templates,
     sizes: catalog.sizes.map(({ id, label, width, height }) => ({ id, label, width, height })), costs: catalog.costs,
+    engines: backend().id === 'fal' ? catalog.engines.map(({ id, kinds, name, vendor, tag, credits }) => ({ id, kinds, name, vendor, tag, credits })) : [],
   }));
   R.get('/api/health', async () => { const db = await supa.ping(); return { ok: db, db, storage: db, backend: backend().id }; });
 
@@ -84,6 +86,11 @@ function build(): Router {
       character: async (id) => (await supa.select('characters', { id: `eq.${id}`, select: '*' }, s.jwt))[0],
       audit: async (event, detail) => { await supa.write('insert', 'audit_log', { user_id: s.user.id, event, detail }); },
     }, await r.json());
+    // Plafond quotidien du site : protège la carte bancaire du propriétaire contre les abus.
+    if (isRemote(backend().id) && ['t2i', 'i2v', 't2v'].includes(plan.kind)) {
+      const spent = await supa.spentSince(new Date(Date.now() - 24 * 3600_000));
+      if (spent + plan.cost > cloud.dailyBudget) throw new HttpError(503, 'budget_reached', 'Le quota de génération du jour est atteint. Réessayez demain.');
+    }
     if (cloud.creditsEnabled) await supa.credits(s.user.id, -plan.cost, 'job', plan.id);
     let row: Row | null;
     try {
