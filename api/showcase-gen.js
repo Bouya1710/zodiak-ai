@@ -1,4 +1,6 @@
-// Génération de la vitrine côté serveur (une fois, protégée par SHOWCASE_TOKEN). Actions : submit, poll, finish, manifest.
+// Génération de la vitrine côté serveur. Actions : submit, poll, finish, manifest.
+// Protégée par le jeton local `.showcase-token` : seul son hash est ici (le même que dans l'edge function showcase-upload).
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { COST_PER_CLIP, CLIPS, MODELS, VERSION } from '../scripts/showcase-clips.mjs';
 
@@ -14,18 +16,19 @@ try {
 }
 const lib = await import('../scripts/showcase-lib.mjs');
 
+const TOKEN_SHA256 = '990475f84a664f88798c4776b48c60d59b2fb07c672b722ec3549b3a9a20db41';
 const send = (res, code, body) => { res.statusCode = code; res.setHeader('content-type', 'application/json'); res.end(JSON.stringify(body)); };
 
 export default async function handler(req, res) {
   try {
-    const token = process.env.SHOWCASE_TOKEN;
-    if (!token || req.headers['x-showcase-token'] !== token) return send(res, 403, { error: 'forbidden' });
+    const token = String(req.headers['x-showcase-token'] ?? '');
+    if (crypto.createHash('sha256').update(token).digest('hex') !== TOKEN_SHA256) return send(res, 403, { error: 'forbidden' });
     const key = process.env.FAL_KEY;
     if (!key && ['submit', 'poll'].includes(req.body?.action)) return send(res, 400, { error: 'FAL_KEY manquante' });
     let body = req.body;
     if (typeof body === 'string') body = JSON.parse(body);
     const clip = lib.clipById(body?.clip);
-    const up = process.env.SHOWCASE_UPLOAD_URL;
+    const up = process.env.SHOWCASE_UPLOAD_URL || 'https://wlrjpgtjizegehhwelgh.supabase.co/functions/v1/showcase-upload';
     switch (body?.action) {
       case 'submit':
         if (!clip) return send(res, 400, { error: 'clip inconnu' });
