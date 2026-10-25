@@ -86,6 +86,20 @@ async function tokenCall(grant: string, body: Record<string, string>): Promise<T
   if (!res.ok) throw new SupaError(res.status, (await readError(res)).message);
   return (await res.json()) as Tokens;
 }
+/** Envoie l'e-mail de réinitialisation (flux PKCE : le lien revient avec ?code=). */
+export async function recover(email: string, redirectTo: string, challenge: string): Promise<void> {
+  const res = await fetch(`${cloud.supabaseUrl}/auth/v1/recover?redirect_to=${encodeURIComponent(redirectTo)}`, {
+    method: 'POST', headers: headers(undefined, { 'content-type': 'application/json' }),
+    body: JSON.stringify({ email, code_challenge: challenge, code_challenge_method: 's256' }),
+  });
+  if (!res.ok && res.status !== 404) throw new SupaError(res.status, (await readError(res)).message);
+}
+export const exchangeCode = (auth_code: string, code_verifier: string) => tokenCall('pkce', { auth_code, code_verifier });
+
+/** Change le mot de passe de l'utilisateur connecté. */
+export async function setPassword(jwt: string, password: string): Promise<void> {
+  await check(await fetch(`${cloud.supabaseUrl}/auth/v1/user`, { method: 'PUT', headers: headers(jwt, { 'content-type': 'application/json' }), body: JSON.stringify({ password }) }));
+}
 export const passwordLogin = (email: string, password: string) => tokenCall('password', { email, password });
 export const refreshSession = (refresh_token: string) => tokenCall('refresh_token', { refresh_token });
 

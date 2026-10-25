@@ -20,6 +20,7 @@ const codeLine = (text) => h('div', { class: 'code-line' }, h('code', {}, text),
 
 /** @param {HTMLElement} root @param {URLSearchParams} qs */
 export function mount(root, qs) {
+  const resetLink = location.hash.includes('nouveau-mdp=1'); // lu avant que go() ne réécrive l'adresse
   const panel = h('section', { class: 'set-panel' });
   const nav = h('nav', { class: 'set-nav', 'aria-label': 'Paramètres' });
   const sections = [['profil', 'Profil', '◉'], ['credits', 'Crédits', '✦'], ['connecteurs', 'Connecteurs', '⧉']];
@@ -45,6 +46,21 @@ export function mount(root, qs) {
     panel.append(h('div', { class: 'set-card' },
       h('div', { class: 'row' }, h('span', { class: 'k' }, 'E-mail'), h('b', {}, state.user ? state.user.email : '')),
       h('div', { class: 'row' }, h('span', { class: 'k' }, 'Rôle'), h('b', {}, owner ? 'Propriétaire du site' : 'Membre'))));
+    const pw = h('input', { type: 'password', minLength: 8, autocomplete: 'new-password', placeholder: '8 caractères minimum' });
+    const out = h('div', { 'aria-live': 'polite' });
+    const reset = resetLink;
+    panel.append(h('form', { class: 'set-card', onsubmit: async (ev) => {
+      ev.preventDefault(); clear(out);
+      try {
+        await request('/auth/password', { method: 'POST', json: { password: pw.value } });
+        pw.value = '';
+        out.append(h('div', { class: 'notice' }, 'Mot de passe modifié.'));
+      } catch (e) { out.append(errorBox(describeError(e))); }
+    } },
+    h('b', {}, reset ? 'Choisissez votre nouveau mot de passe' : 'Changer le mot de passe'),
+    reset ? h('p', { class: 'hint' }, 'Vous êtes connecté grâce au lien reçu par e-mail.') : null,
+    h('div', { class: 'pw-row' }, pw, h('button', { type: 'submit', class: 'btn btn-primary' }, 'Enregistrer')), out));
+    if (reset) pw.focus();
   }
 
   async function credits() {

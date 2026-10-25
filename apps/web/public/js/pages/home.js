@@ -33,12 +33,12 @@ export function mount(root) {
       tile('☺', 'Personnages', 'Même visage, plan après plan', '#/personnages'),
       tile('♪', 'Lip-sync', 'Une voix sur votre vidéo', '#/outils'),
       tile('⤢', 'Upscale', 'Agrandir x2 ou x4', '#/outils'),
-      tile('❏', 'Modèles de prompt', 'Des structures à remplir', '#/studio?tab=image'))));
+      tile('✳', 'Connecteur Claude', 'Créez depuis une conversation', '#/parametres?section=connecteurs'))));
 
   const banner = wide('banner-wrap', h('div', { class: 'big-banner' },
     canvasFor({ ratio: 0.3, width: 960, clip: 'c14' }),
     h('div', { class: 'bb-body' }, h('span', { class: 'bb-eyebrow' }, 'Open source'), h('div', { class: 'bb-title' }, 'ZODIAK ', h('b', {}, 'STUDIO')),
-      h('p', {}, 'Texte vers image, image vers vidéo, caméra, personnages. Libre et auto-hébergeable.'),
+      h('p', {}, 'FLUX, Nano Banana, Wan 2.2 et Kling réunis, 22 mouvements de caméra, et un connecteur pour créer depuis Claude.'),
       h('a', { class: 'btn btn-primary', href: authed ? '#/studio?tab=video' : cta }, 'Essayer maintenant'))));
 
   const presets = wide('presets', h('div', { class: 'preset-wall' },
@@ -71,7 +71,7 @@ export function mount(root) {
       step('2', 'Choisissez un mouvement', 'Dolly, orbite, grue, drone…', { clip: 'c03' }),
       step('3', 'Lancez la génération', 'Suivez le résultat en direct.', { clip: 'c06' })));
 
-  const pricing = wide('pricing-wrap', h('div', { class: 'row-head' }, h('h2', {}, 'Simple et transparent'), h('p', {}, 'Gratuit en ligne, libre à héberger, votre clé pour les vrais modèles.')), plansEl());
+  const pricing = wide('pricing-wrap', h('div', { class: 'row-head' }, h('h2', {}, 'Simple et transparent'), h('p', {}, '100 crédits offerts, puis vous payez seulement ce que vous générez.')), plansEl());
 
   const more = wide('more', h('div', { class: 'row-head' }, h('h2', {}, 'Explorer plus')),
     h('div', { class: 'chips-cloud' }, ...[['Image', '#/studio?tab=image'], ['Vidéo', '#/studio?tab=video'], ['Texte vers vidéo', '#/studio?tab=video&mode=t2v'], ['Presets de caméra', '#/studio?tab=video'], ['Personnages', '#/personnages'], ['Lip-sync', '#/outils'], ['Upscale', '#/outils'], ['Interpolation', '#/outils'], ['Montage', '#/outils'], ['Galerie', '#/galerie'], ['Tarifs', '#/tarifs']].map(([t, href]) => h('a', { href }, t))));

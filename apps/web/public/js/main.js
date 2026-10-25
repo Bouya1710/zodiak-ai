@@ -12,6 +12,9 @@ const ROUTES = {
   '/tarifs': { title: 'Tarifs et crédits', load: () => import('./pages/pricing.js'), pub: true, full: true },
   '/parametres': { title: 'Paramètres', load: () => import('./pages/account.js') },
   '/compte': { title: 'Paramètres', load: () => import('./pages/account.js') },
+  '/legal/mentions': { title: 'Mentions légales', load: () => import('./pages/legal.js'), pub: true },
+  '/legal/cgu': { title: "Conditions d'utilisation", load: () => import('./pages/legal.js'), pub: true },
+  '/legal/confidentialite': { title: 'Confidentialité', load: () => import('./pages/legal.js'), pub: true },
   '/connexion': { title: 'Connexion', load: () => import('./pages/login.js'), pub: true, full: true },
 };
 
@@ -35,15 +38,28 @@ for (const [href, label] of NAV) {
 }
 const pricing = h('a', { class: 'btn btn-small pricing-pill', href: '#/tarifs' }, '✦ Tarifs');
 const credits = h('a', { class: 'credits', href: '#/parametres?section=credits', title: 'Mes crédits', hidden: true });
-const settingsBtn = h('a', { class: 'btn btn-small btn-ghost settings-link', href: '#/parametres', title: 'Paramètres', 'aria-label': 'Paramètres', hidden: true }, '⚙');
-const userEmail = h('span', { class: 'user-email', hidden: true });
+// Menu du compte (avatar) : e-mail, crédits, paramètres, connecteurs, déconnexion.
+const avatar = h('span', { class: 'avatar', 'aria-hidden': 'true' });
+const menuEmail = h('span', { class: 'acct-email' });
+const menuCredits = h('span', { class: 'acct-credits' });
+const acct = h('details', { class: 'acct-menu', hidden: true },
+  h('summary', { 'aria-label': 'Menu du compte' }, avatar),
+  h('div', { class: 'acct-pop', role: 'menu' },
+    h('div', { class: 'acct-who' }, menuEmail, menuCredits),
+    h('a', { role: 'menuitem', href: '#/parametres?section=credits' }, '✦ Crédits'),
+    h('a', { role: 'menuitem', href: '#/galerie' }, '▦ Mes créations'),
+    h('a', { role: 'menuitem', href: '#/parametres?section=connecteurs' }, '⧉ Connecteurs (Claude)'),
+    h('a', { role: 'menuitem', href: '#/parametres' }, '⚙ Paramètres'),
+    h('button', { type: 'button', role: 'menuitem', onclick: () => void logout() }, '↪ Déconnexion')));
+acct.addEventListener('click', (ev) => { if (ev.target instanceof HTMLAnchorElement) acct.open = false; });
+document.addEventListener('click', (ev) => { if (acct.open && !acct.contains(/** @type {Node} */ (ev.target))) acct.open = false; });
+document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && acct.open) { acct.open = false; acct.querySelector('summary').focus(); } });
 const loginBtn = h('a', { class: 'btn btn-small btn-ghost', href: '#/connexion' }, 'Connexion');
 const startBtn = h('a', { class: 'btn btn-small btn-primary', href: '#/studio' }, 'Créer');
-const logoutBtn = h('button', { type: 'button', class: 'btn btn-small btn-ghost', hidden: true, onclick: () => void logout() }, 'Déconnexion');
 const header = h('header', { class: 'site-header' },
   h('a', { class: 'brand', href: '#/', 'aria-label': 'ZODIAK AI, accueil' }, logo(30), h('span', { class: 'brand-name' }, 'ZODIAK AI')),
   nav,
-  h('div', { class: 'header-right' }, pricing, credits, userEmail, settingsBtn, loginBtn, startBtn, logoutBtn),
+  h('div', { class: 'header-right' }, pricing, credits, loginBtn, startBtn, acct),
 );
 
 const main = h('main', { id: 'main', class: 'main', tabindex: -1 });
@@ -54,7 +70,8 @@ const footer = h('footer', { class: 'site-footer' },
       h('p', { style: 'margin-top:.8rem;max-width:32ch' }, `Plateforme libre de génération d'images et de vidéos par IA. Auto-hébergeable, licence Apache-2.0.`)),
     col('Créer', [['#/studio?tab=image', 'Texte vers image'], ['#/studio?tab=video', 'Image vers vidéo'], ['#/studio?tab=video&mode=t2v', 'Texte vers vidéo'], ['#/personnages', 'Personnages cohérents']]),
     col('Outils', [['#/outils', 'Agrandir (upscale)'], ['#/outils', 'Interpolation'], ['#/outils', 'Lip-sync'], ['#/outils', 'Montage et découpe']]),
-    col('Projet', [['#/tarifs', 'Tarifs et crédits'], ['#/galerie', 'Galerie'], ['#/connexion', 'Connexion']]),
+    col('Projet', [['#/tarifs', 'Tarifs et crédits'], ['#/galerie', 'Galerie'], ['#/parametres?section=connecteurs', 'Connecter Claude'], ['#/connexion', 'Connexion']]),
+    col('Légal', [['#/legal/mentions', 'Mentions légales'], ['#/legal/cgu', "Conditions d'utilisation"], ['#/legal/confidentialite', 'Confidentialité']]),
   ),
   h('p', { class: 'foot-note' }, `Utilisez ZODIAK AI de façon responsable : pas de contenu illégal ou sexuel explicite, pas d'usurpation d'identité, et uniquement des visages dont vous avez le droit d'utiliser l'image. ZODIAK AI - Apache-2.0.`),
 );
@@ -78,10 +95,12 @@ function syncHeader() {
   const multi = isMulti();
   credits.hidden = !(authed && state.config && state.config.creditsEnabled);
   credits.textContent = state.user ? `${state.user.credits} crédits` : '';
-  userEmail.hidden = !(authed && multi);
-  userEmail.textContent = state.user ? state.user.email : '';
-  logoutBtn.hidden = !(authed && multi);
-  settingsBtn.hidden = !(authed && multi);
+  acct.hidden = !(authed && multi);
+  if (state.user) {
+    avatar.textContent = state.user.email.slice(0, 1).toUpperCase();
+    menuEmail.textContent = state.user.email;
+    menuCredits.textContent = state.config && state.config.creditsEnabled ? `${state.user.credits} crédits` : '';
+  }
   loginBtn.hidden = authed || !multi;
   startBtn.textContent = authed ? 'Créer' : 'Commencer';
   startBtn.setAttribute('href', authed ? '#/studio' : '#/connexion?inscription=1');

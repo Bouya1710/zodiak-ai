@@ -71,6 +71,34 @@ function build(): Router {
     r.res.setHeader('set-cookie', cookieFor(t));
     return { user: (await sessionFromTokens(t.access_token)).user };
   }));
+  // Mot de passe oublié : e-mail Supabase, retour sur /api/auth/callback (code PKCE, vérificateur en cookie).
+  R.post('/api/auth/recover', guard(async (r) => {
+    if (!limiter.check(`recover:${r.ip}`, 5, 15 * 60_000)) throw new HttpError(429, 'rate_limited', 'Trop de demandes, réessayez plus tard');
+    const b = await r.json();
+    const email = typeof b.email === 'string' ? b.email.trim().toLowerCase() : '';
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new HttpError(422, 'invalid', 'Adresse e-mail invalide');
+    const verifier = crypto.randomBytes(32).toString('base64url');
+    const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+    await supa.recover(email, `${oauth.origin(r.raw)}/api/auth/callback`, challenge);
+    r.res.setHeader('set-cookie', `zodiak_pkce=${verifier}; Path=/api/auth; HttpOnly; SameSite=Lax; Max-Age=3600${cloud.secureCookies ? '; Secure' : ''}`);
+    return { ok: true }; // même réponse que l'adresse existe ou non
+  }));
+  R.get('/api/auth/callback', guard(async (r) => {
+    const code = r.query.get('code') ?? '';
+    const verifier = r.cookies.zodiak_pkce ?? '';
+    const t = code && verifier ? await supa.exchangeCode(code, verifier) : null;
+    const clear = `zodiak_pkce=; Path=/api/auth; HttpOnly; SameSite=Lax; Max-Age=0${cloud.secureCookies ? '; Secure' : ''}`;
+    r.res.writeHead(302, t ? { 'set-cookie': [cookieFor(t), clear], location: '/#/parametres?section=profil&nouveau-mdp=1' } : { 'set-cookie': clear, location: '/#/connexion?lien-expire=1' });
+    r.res.end();
+    return undefined;
+  }));
+  R.post('/api/auth/password', guard(async (r) => {
+    const s = need(r);
+    const b = await r.json();
+    if (typeof b.password !== 'string' || b.password.length < 8) throw new HttpError(422, 'invalid', 'Mot de passe : 8 caractères minimum');
+    await supa.setPassword(s.jwt, b.password);
+    return { ok: true };
+  }));
   R.post('/api/auth/logout', (r) => { r.res.setHeader('set-cookie', cookieFor(null)); return { ok: true }; });
   R.get('/api/auth/me', guard((r) => ({ user: need(r).user })));
 
@@ -376,7 +404,7 @@ export async function handle(raw: http.IncomingMessage, res: http.ServerResponse
     if (!m) throw new HttpError(404, 'not_found', 'Route inconnue');
     if (m === 'method') throw new HttpError(405, 'invalid', 'Méthode non autorisée');
     r.params = m.params;
-    if (!['GET', 'HEAD'].includes(r.method) && !/^\/(api\/(webhooks|mcp|oauth)|\.well-known)(\/|$)/.test(r.url.pathname) && raw.headers.origin) {
+    if (!['GET', 'HEAD'].includes(r.method) && !/^\/(api\/(webhooks|mcp|oauth)|\.well-known)(\/|$)/.test(r.url.pathname) && r.url.pathname !== '/api/auth/callback' && raw.headers.origin) {
       if (new URL(raw.headers.origin).host !== raw.headers.host) throw new HttpError(403, 'forbidden', 'Origine refusée');
     }
     if (!/^\/(api\/(webhooks|mcp|oauth)|\.well-known)(\/|$)/.test(r.url.pathname)) r.s = await sessionFrom(raw, res);
