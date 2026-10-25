@@ -1,3 +1,4 @@
+import { returnTo } from './lib.js';
 /* Point d'entrée : en-tête, routage par hash, pied de page, barre mobile. */
 import { init, isMulti, logout, state, subscribe } from './state.js';
 import { clear, errorBox, h, logo } from './ui.js';
@@ -9,7 +10,8 @@ const ROUTES = {
   '/personnages': { title: 'Personnages', load: () => import('./pages/characters.js') },
   '/outils': { title: 'Outils', load: () => import('./pages/tools.js') },
   '/tarifs': { title: 'Tarifs et crédits', load: () => import('./pages/pricing.js'), pub: true, full: true },
-  '/compte': { title: 'Mon compte', load: () => import('./pages/account.js') },
+  '/parametres': { title: 'Paramètres', load: () => import('./pages/account.js') },
+  '/compte': { title: 'Paramètres', load: () => import('./pages/account.js') },
   '/connexion': { title: 'Connexion', load: () => import('./pages/login.js'), pub: true, full: true },
 };
 
@@ -32,7 +34,8 @@ for (const [href, label] of NAV) {
   nav.appendChild(a);
 }
 const pricing = h('a', { class: 'btn btn-small pricing-pill', href: '#/tarifs' }, '✦ Tarifs');
-const credits = h('a', { class: 'credits', href: '#/compte', title: 'Mon compte : crédits et connecteur Claude', hidden: true });
+const credits = h('a', { class: 'credits', href: '#/parametres?section=credits', title: 'Mes crédits', hidden: true });
+const settingsBtn = h('a', { class: 'btn btn-small btn-ghost settings-link', href: '#/parametres', title: 'Paramètres', 'aria-label': 'Paramètres', hidden: true }, '⚙');
 const userEmail = h('span', { class: 'user-email', hidden: true });
 const loginBtn = h('a', { class: 'btn btn-small btn-ghost', href: '#/connexion' }, 'Connexion');
 const startBtn = h('a', { class: 'btn btn-small btn-primary', href: '#/studio' }, 'Créer');
@@ -40,7 +43,7 @@ const logoutBtn = h('button', { type: 'button', class: 'btn btn-small btn-ghost'
 const header = h('header', { class: 'site-header' },
   h('a', { class: 'brand', href: '#/', 'aria-label': 'ZODIAK AI, accueil' }, logo(30), h('span', { class: 'brand-name' }, 'ZODIAK AI')),
   nav,
-  h('div', { class: 'header-right' }, pricing, credits, userEmail, loginBtn, startBtn, logoutBtn),
+  h('div', { class: 'header-right' }, pricing, credits, userEmail, settingsBtn, loginBtn, startBtn, logoutBtn),
 );
 
 const main = h('main', { id: 'main', class: 'main', tabindex: -1 });
@@ -78,6 +81,7 @@ function syncHeader() {
   userEmail.hidden = !(authed && multi);
   userEmail.textContent = state.user ? state.user.email : '';
   logoutBtn.hidden = !(authed && multi);
+  settingsBtn.hidden = !(authed && multi);
   loginBtn.hidden = authed || !multi;
   startBtn.textContent = authed ? 'Créer' : 'Commencer';
   startBtn.setAttribute('href', authed ? '#/studio' : '#/connexion?inscription=1');
@@ -126,6 +130,8 @@ async function route() {
     return;
   }
   if (path === '/connexion' && (!multi || state.user)) {
+    const back = returnTo(location.hash);
+    if (back) { location.href = back; return; }
     location.hash = '#/studio';
     return;
   }

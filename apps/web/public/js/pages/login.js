@@ -1,6 +1,6 @@
 // Connexion / inscription (mode multi uniquement).
 import { api } from '../api.js';
-import { describeError } from '../lib.js';
+import { describeError, returnTo } from '../lib.js';
 import { init, state } from '../state.js';
 import { clear, errorBox, field, h, logo } from '../ui.js';
 import { canvasFor } from '../showcase.js';
@@ -53,7 +53,9 @@ export function mount(root) {
       if (registering) await api.register(email.value.trim(), pass.value);
       else await api.login(email.value.trim(), pass.value);
       await init();
-      location.hash = '#/studio';
+      const back = returnTo(location.hash);
+      if (back) location.href = back;
+      else location.hash = '#/studio';
     } catch (e) {
       err.appendChild(errorBox(describeError(e)));
     } finally {

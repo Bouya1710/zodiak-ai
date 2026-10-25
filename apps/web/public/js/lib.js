@@ -304,3 +304,10 @@ export function stubAsset(id, kind = 'image') {
     createdAt: '',
   };
 }
+
+/** Adresse de retour après connexion (autorisation d'un connecteur), limitée au flux OAuth du site. */
+export function returnTo(hash) {
+  const q = new URLSearchParams((hash.split('?')[1]) || '');
+  const r = q.get('retour') || '';
+  return r.startsWith('/oauth/authorize?') ? r : null;
+}

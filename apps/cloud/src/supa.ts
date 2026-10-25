@@ -55,6 +55,15 @@ export async function credits(userId: string, delta: number, reason: string, job
 /** Crédits engagés par tous les utilisateurs depuis `since` (plafond quotidien). */
 export const spentSince = (since: Date) => rpc<number>('app_spent_since', { p_since: since.toISOString() });
 
+/** Nouvelle session indépendante pour un utilisateur, sans mot de passe (edge function mint-session). */
+export async function mintSession(userId: string): Promise<Tokens> {
+  const res = await fetch(`${cloud.supabaseUrl}/functions/v1/mint-session`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ secret: cloud.serverSecret, user_id: userId }),
+  });
+  if (!res.ok) throw new SupaError(res.status, `mint-session : ${(await res.text()).slice(0, 200)}`);
+  return (await res.json()) as Tokens;
+}
+
 // ---------- Auth (Supabase Auth)
 export interface Tokens { access_token: string; refresh_token: string }
 

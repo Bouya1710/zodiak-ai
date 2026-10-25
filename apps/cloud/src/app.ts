@@ -16,6 +16,7 @@ import { NOTICES, checkPrompt, requireConsent } from '../../api/src/guardrails.t
 import { serializeJob } from '../../api/src/plan.ts';
 import { createToken, sessionFromToken } from './tokens.ts';
 import { handleRpc } from './mcp.ts';
+import * as oauth from './oauth.ts';
 import { isOwner, ownerReport } from './admin.ts';
 import { serializeAsset, sniff } from '../../api/src/serialize.ts';
 import { probe } from '../../api/src/ffmpeg.ts';
@@ -281,9 +282,8 @@ function build(): Router {
     const s = need(r);
     if (!limiter.check(`auth:${r.ip}`, 10, 60_000)) throw new HttpError(429, 'rate_limited', 'Trop de tentatives');
     const b = await r.json();
-    if (typeof b.password !== 'string' || !b.password) throw new HttpError(422, 'invalid', 'Mot de passe requis');
-    if ((await supa.select('api_tokens', { select: 'id' }, s.jwt)).length >= 5) throw new HttpError(422, 'invalid', 'Maximum 5 clés : supprimez-en une');
-    const t = await createToken(s.user, b.password, typeof b.label === 'string' ? b.label.trim() : 'Claude');
+    if ((await supa.select('api_tokens', { select: 'id' }, s.jwt)).length >= 10) throw new HttpError(422, 'invalid', 'Maximum 10 accès : retirez-en un');
+    const t = await createToken(s.user, typeof b.label === 'string' ? b.label.trim() : 'Clé manuelle');
     send(r.res, 201, { id: t.id, token: t.token, url: `${cloud.publicUrl || `https://${r.raw.headers.host}`}/api/mcp/${t.token}` });
     return undefined;
   }));
@@ -299,7 +299,13 @@ function build(): Router {
   const mcp = async (r: Req) => {
     const key = r.params.token ?? String(r.raw.headers.authorization ?? '').replace(/^Bearer\s+/i, '');
     if (!limiter.check(`mcp:${r.ip}`, 120, 60_000)) throw new HttpError(429, 'rate_limited', 'Trop de demandes');
-    const s = await sessionFromToken(key);
+    let s: Session;
+    try { s = await sessionFromToken(key); } catch (e) {
+      // Sans clé valide : le client découvre le serveur OAuth (spécification MCP « Authorization »).
+      r.res.writeHead(401, { 'content-type': 'application/json', 'www-authenticate': `Bearer resource_metadata="${oauth.origin(r.raw)}/.well-known/oauth-protected-resource"` });
+      r.res.end(JSON.stringify({ error: e instanceof HttpError ? e.message : 'unauthorized' }));
+      return undefined;
+    }
     const body = await r.json();
     const out = Array.isArray(body) ? (await Promise.all(body.map((m) => handleRpc(s, m)))).filter(Boolean) : await handleRpc(s, body);
     if (out === null || (Array.isArray(out) && !out.length)) { r.res.writeHead(202); r.res.end(); return undefined; }
@@ -307,6 +313,38 @@ function build(): Router {
   };
   R.post('/api/mcp', mcp);
   R.post('/api/mcp/:token', mcp);
+  R.get('/api/mcp', () => { throw new HttpError(405, 'invalid', 'POST uniquement (MCP Streamable HTTP)'); });
+
+  // ---------- OAuth 2.1 du connecteur (Claude : Paramètres → Connecteurs → ajouter l'URL /api/mcp)
+  R.get('/.well-known/oauth-protected-resource', (r) => oauth.protectedResource(r.raw));
+  R.get('/.well-known/oauth-protected-resource/api/mcp', (r) => oauth.protectedResource(r.raw));
+  R.get('/.well-known/oauth-authorization-server', (r) => oauth.authServer(r.raw));
+  R.post('/api/oauth/register', async (r) => {
+    if (!limiter.check(`oauth:${r.ip}`, 20, 60_000)) throw new HttpError(429, 'rate_limited', 'Trop de demandes');
+    send(r.res, 201, oauth.register(await r.json()));
+    return undefined;
+  });
+  R.post('/api/oauth/token', async (r) => {
+    try { return oauth.token(await oauth.formBody(r.raw)); } catch (e) {
+      send(r.res, 400, { error: (e as any).oauth ?? 'invalid_request', error_description: (e as Error).message });
+      return undefined;
+    }
+  });
+  const html = (r: Req, code: number, body: string) => { r.res.writeHead(code, { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }); r.res.end(body); return undefined; };
+  R.get('/oauth/authorize', guard(async (r) => {
+    const a = oauth.authRequest(r.query);
+    if (!r.s) { r.res.writeHead(302, { location: `/#/connexion?retour=${encodeURIComponent(r.url.pathname + r.url.search)}` }); r.res.end(); return undefined; }
+    return html(r, 200, oauth.consentPage(a, r.s.user.email, r.url.search.slice(1)));
+  }));
+  R.post('/oauth/authorize', guard(async (r) => {
+    const s = need(r);
+    const a = oauth.authRequest(r.query);
+    const f = await oauth.formBody(r.raw);
+    const to = f.get('decision') === 'allow' ? await oauth.approve(s, a) : oauth.denyUrl(a);
+    r.res.writeHead(302, { location: to }); r.res.end();
+    return undefined;
+  }));
+
 
   R.post('/api/admin/credits', guard(async (r) => {
     const s = need(r);
@@ -335,10 +373,10 @@ export async function handle(raw: http.IncomingMessage, res: http.ServerResponse
     if (!m) throw new HttpError(404, 'not_found', 'Route inconnue');
     if (m === 'method') throw new HttpError(405, 'invalid', 'Méthode non autorisée');
     r.params = m.params;
-    if (!['GET', 'HEAD'].includes(r.method) && !/^\/api\/(webhooks|mcp)(\/|$)/.test(r.url.pathname) && raw.headers.origin) {
+    if (!['GET', 'HEAD'].includes(r.method) && !/^\/(api\/(webhooks|mcp|oauth)|\.well-known)(\/|$)/.test(r.url.pathname) && raw.headers.origin) {
       if (new URL(raw.headers.origin).host !== raw.headers.host) throw new HttpError(403, 'forbidden', 'Origine refusée');
     }
-    if (!/^\/api\/(webhooks|mcp)(\/|$)/.test(r.url.pathname)) r.s = await sessionFrom(raw, res);
+    if (!/^\/(api\/(webhooks|mcp|oauth)|\.well-known)(\/|$)/.test(r.url.pathname)) r.s = await sessionFrom(raw, res);
     const out = await m.handler(r);
     if (out !== undefined && !res.headersSent) send(res, 200, out);
   } catch (e) {

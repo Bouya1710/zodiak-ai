@@ -1,5 +1,5 @@
 // Clés de connecteur (MCP) : « zk_<id>.<secret> ». Chaque clé porte sa propre session Supabase,
-// ouverte avec le mot de passe à la création puis rafraîchie ici ; seul le SHA-256 du secret est stocké.
+// ouverte sans mot de passe à la création (edge function mint-session) puis rafraîchie ici ; seul le SHA-256 du secret est stocké.
 import crypto from 'node:crypto';
 import { cloud } from './env.ts';
 import * as supa from './supa.ts';
@@ -22,10 +22,9 @@ function open(sealed: string): string {
   return Buffer.concat([d.update(b.subarray(28)), d.final()]).toString('utf8');
 }
 
-/** Crée une clé : nouvelle session dédiée (mot de passe redemandé), renvoyée une seule fois. */
-export async function createToken(user: User, password: string, label: string): Promise<{ id: string; token: string }> {
-  const t = await supa.passwordLogin(user.email, password);
-  if (!t) throw new HttpError(401, 'unauthorized', 'Mot de passe incorrect');
+/** Crée une clé : nouvelle session dédiée (sans mot de passe), renvoyée une seule fois. */
+export async function createToken(user: User, label: string): Promise<{ id: string; token: string }> {
+  const t = await supa.mintSession(user.id);
   const secret = crypto.randomBytes(24).toString('base64url');
   const row = await supa.write('insert', 'api_tokens', { user_id: user.id, label: label.slice(0, 60) || 'Claude', secret_sha256: sha(secret), refresh_enc: seal(t.refresh_token) });
   return { id: row!.id, token: `zk_${row!.id}.${secret}` };
