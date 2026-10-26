@@ -57,6 +57,19 @@ test('cloud : inscription, génération, galerie, historique, crédits, isolatio
   assert.equal(vid.job.status, 'done', JSON.stringify(vid.job));
   assert.equal(vid.assets[0].kind, 'video');
 
+  // rendu final d'un brouillon : mêmes entrées et graine, en qualité finale ; seul un brouillon terminé est accepté
+  const fin = await api('POST', `/api/jobs/${vid.job.id}/final`, {});
+  assert.equal(fin.status, 202, JSON.stringify(fin.body));
+  assert.equal(fin.body.job.params.draft, false);
+  assert.equal(fin.body.job.params.seed, vid.job.params.seed);
+  assert.equal(fin.body.job.inputAssetId, vid.job.inputAssetId);
+  assert.equal(fin.body.job.presetId, 'dolly-in');
+  assert.equal((await waitJob(fin.body.job.id)).job.status, 'done');
+  assert.equal((await api('POST', `/api/jobs/${fin.body.job.id}/final`, {})).status, 422);
+  const q = await api('POST', '/api/quote', { kind: 'i2v', params: { draft: true } });
+  assert.equal(q.status, 200);
+  assert.ok(q.body.credits >= 1 && q.body.engine === null, JSON.stringify(q.body)); // mode démo : pas de modèle distant
+
   // outils
   const trimmed = await run({ kind: 'trim', inputAssetId: vid.assets[0].id, params: { start: 0, end: 1 } });
   assert.equal(trimmed.job.status, 'done', JSON.stringify(trimmed.job));
@@ -66,7 +79,7 @@ test('cloud : inscription, génération, galerie, historique, crédits, isolatio
   assert.equal(blocked.status, 422); assert.equal(blocked.body.code, 'blocked');
   assert.ok(fake.tables.audit_log!.length >= 1);
   assert.ok((await api('GET', '/api/jobs')).body.items.length >= 4);
-  const gal = await api('GET', '/api/assets?kind=video'); assert.equal(gal.body.items.length, 2);
+  const gal = await api('GET', '/api/assets?kind=video'); assert.equal(gal.body.items.length, 3); // brouillon, rendu final, découpe
   assert.equal((await api('GET', '/api/assets?q=phare')).body.items.length, 1);
   assert.equal((await api('PATCH', `/api/assets/${img.assets[0].id}`, { favorite: true })).body.asset.favorite, true);
 

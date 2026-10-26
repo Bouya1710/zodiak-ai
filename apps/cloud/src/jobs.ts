@@ -6,6 +6,7 @@ import { processJob, backend } from './process.ts';
 import { isRemote } from './providers.ts';
 import { HttpError } from '../../api/src/ctx.ts';
 import { planJob } from '../../api/src/plan.ts';
+import { catalog } from '../../api/src/catalog.ts';
 
 type Row = Record<string, any>;
 
@@ -42,4 +43,21 @@ export async function createJob(s: Session, body: Record<string, any>): Promise<
   }
   background(processJob(s, row!));
   return row!;
+}
+
+/** Rendu final d'un brouillon réussi : mêmes texte, images, cadrage et graine, en qualité finale.
+ *  Par défaut le même modèle ; quality = premium → le modèle premium le moins cher ; ou un modèle précis. */
+export async function finalFromDraft(s: Session, jobId: string, o: { engine?: string; quality?: string }): Promise<Row> {
+  const j = (await supa.select('jobs', { id: `eq.${jobId}`, select: '*' }, s.jwt))[0];
+  if (!j) throw new HttpError(404, 'not_found', 'Job introuvable');
+  const p = JSON.parse(j.params ?? '{}');
+  if (j.status !== 'done' || !p.draft) throw new HttpError(422, 'invalid', 'Seul un brouillon terminé peut passer en rendu final');
+  const r = p.width / p.height;
+  const sizeId = p.sizeId ?? [...catalog.sizes].sort((a, b) => Math.abs(Math.log(a.width / a.height / r)) - Math.abs(Math.log(b.width / b.height / r)))[0]!.id;
+  return createJob(s, {
+    kind: j.kind, prompt: j.prompt ?? undefined, negativePrompt: j.negative_prompt ?? undefined, presetId: j.preset_id ?? undefined,
+    characterId: j.character_id ?? undefined, inputAssetId: j.input_asset_id ?? undefined, endAssetId: p.endAssetId,
+    consent: true, // déjà donné pour ces mêmes images lors du brouillon
+    params: { sizeId, duration: p.duration, seed: p.seed, draft: false, engine: o.engine ?? (o.quality === 'premium' ? 'auto' : p.engine), quality: o.quality },
+  });
 }

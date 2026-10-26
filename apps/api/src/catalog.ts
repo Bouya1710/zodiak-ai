@@ -8,7 +8,7 @@ export const JOB_KINDS: JobKind[] = ['t2i', 'i2v', 't2v', 'upscale', 'interpolat
 export interface SizeDef { id: string; label: string; width: number; height: number; video: { width: number; height: number; draft: { width: number; height: number } } }
 export interface CameraPreset { id: string; label: string; category: string; description: string; promptFragment: string; negativeFragment?: string; motion: string }
 // Modèle de génération distant (fal) : 1 crédit ≈ 0,01 $ de coût fournisseur.
-export interface Engine { id: string; kinds: JobKind[]; name: string; vendor: string; tag?: string; credits: number; draftCredits?: number; provider?: 'fal' | 'modal' | 'kling' | 'byteplus' | 'google'; model?: string; endpoints: Partial<Record<JobKind, string>>; note?: string }
+export interface Engine { id: string; kinds: JobKind[]; name: string; vendor: string; tag?: string; credits: number; draftCredits?: number; provider?: 'fal' | 'modal' | 'kling' | 'byteplus' | 'google'; model?: string; premium?: boolean; endpoints: Partial<Record<JobKind, string>>; note?: string }
 export interface Template { id: string; label: string; kind: 't2i' | 'i2v' | 't2v'; description: string; promptTemplate: string; variables: { name: string; label: string; placeholder: string }[]; defaults: Record<string, unknown> }
 
 function readJson<T>(dir: string, file: string): T {
@@ -43,6 +43,37 @@ export const catalog: Catalog = loadCatalog();
 export function engineFor(kind: JobKind, id: unknown, c: Catalog = catalog): Engine | null {
   const list = c.engines.filter((e) => e.kinds.includes(kind));
   return list.find((e) => e.id === id) ?? list[0] ?? null;
+}
+
+// Fournisseurs « directs » (chez l'éditeur du modèle, moins cher que fal) : clé(s) requise(s).
+export const DIRECT_KEYS: Record<string, string[]> = {
+  modal: ['MODAL_TOKEN', 'MODAL_SUBMIT_URL', 'MODAL_STATUS_URL'], kling: ['KLING_API_KEY'], byteplus: ['ARK_API_KEY'], google: ['GEMINI_API_KEY'],
+};
+export const isDirect = (id: string) => id in DIRECT_KEYS;
+export const directReady = (id: string) => (DIRECT_KEYS[id] ?? []).every((k) => !!process.env[k]);
+/** Modèle proposable : moteur fal, ou fournisseur direct configuré, ou repli fal possible. */
+export const engineUsable = (e: Pick<Engine, 'provider' | 'endpoints'>) => !e.provider || directReady(e.provider) || Object.keys(e.endpoints).length > 0;
+
+/** Choix automatique : brouillon → moteur du site le moins cher ; sinon le moins cher du niveau demandé (premium ou non).
+ *  Une image de fin exige un fournisseur direct (fal ne la gère pas ici). */
+export function autoEngine(kind: JobKind, o: { draft?: boolean; endImage?: boolean; premium?: boolean }, c: Catalog = catalog): Engine | null {
+  const list = c.engines.filter((e) => e.kinds.includes(kind) && engineUsable(e) && (!o.endImage || (!!e.provider && isDirect(e.provider))));
+  const pick = o.draft ? list.filter((e) => e.draftCredits) : o.premium ? list.filter((e) => e.premium) : list;
+  const price = (e: Engine) => (o.draft && e.draftCredits ? e.draftCredits : e.credits);
+  return [...(pick.length ? pick : list)].sort((a, b) => price(a) - price(b))[0] ?? null;
+}
+
+/** Modèle retenu pour une demande : « auto » (avec quality = premium | gratuit) ou un identifiant du catalogue. */
+export function resolveEngine(kind: JobKind, params: Record<string, unknown>, c: Catalog = catalog): Engine | null {
+  if (params.engine !== 'auto') return engineFor(kind, params.engine, c);
+  return autoEngine(kind, { draft: params.draft === true, endImage: !!params.endAssetId, premium: params.quality === 'premium' }, c);
+}
+
+/** Devis avant lancement : modèle retenu (modèles distants seulement) et coût en crédits (1 crédit ≈ 0,01 $). */
+export function quote(kind: JobKind, params: Record<string, unknown>, c: Catalog = catalog) {
+  const e = config.backend === 'fal' ? resolveEngine(kind, params, c) : null;
+  const credits = costFor(kind, { ...params, engine: e?.id }, c);
+  return { engine: e && { id: e.id, name: e.name, vendor: e.vendor, premium: !!e.premium }, credits };
 }
 
 export function costFor(kind: JobKind, params: Record<string, unknown>, c: Catalog = catalog): number {

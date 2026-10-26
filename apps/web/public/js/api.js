@@ -94,6 +94,8 @@ export const api = {
   getJob: (id) => request(`/jobs/${enc(id)}`),
   /** @param {string} id @returns {Promise<{job: Job}>} */
   cancelJob: (id) => request(`/jobs/${enc(id)}/cancel`, { method: 'POST' }),
+  /** Rendu final d'un brouillon terminé. @param {string} id @param {{engine?: string, quality?: string}} [o] @returns {Promise<{job: Job}>} */
+  finalJob: (id, o = {}) => request(`/jobs/${enc(id)}/final`, { method: 'POST', json: o }),
   /** @param {string} id @returns {Promise<{ok: true}>} */
   deleteJob: (id) => request(`/jobs/${enc(id)}`, { method: 'DELETE' }),
 

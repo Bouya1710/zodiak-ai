@@ -27,9 +27,23 @@ export function mount(root, qs) {
   let duration = 4;
   let view = 'results';
   const engines = cat.engines || [];
-  const engineSel = { image: null, video: null };
+  const engineSel = { image: 'auto', video: 'auto' };
   const enginesFor = () => engines.filter((e) => e.kinds.includes(kindNow()));
-  const engineNow = () => { const list = enginesFor(); return list.find((e) => e.id === engineSel[tab]) || list[0] || null; };
+  const isAuto = () => engineSel[tab] === 'auto' || engineSel[tab] === 'auto-premium';
+  // Choix automatique (même règle que le serveur) : brouillon → moteur du site le moins cher ; sinon le moins cher du niveau.
+  function autoPick(premium) {
+    const end = kindNow() === 'i2v' && !!endField.getAsset();
+    const list = enginesFor().filter((e) => !end || e.endImage);
+    const d = tab === 'video' && draft.checked;
+    const pick = d ? list.filter((e) => e.draftCredits) : premium ? list.filter((e) => e.premium) : list;
+    const price = (e) => (d && e.draftCredits ? e.draftCredits : e.credits);
+    return [...(pick.length ? pick : list)].sort((a, b) => price(a) - price(b))[0] || null;
+  }
+  const engineNow = () => {
+    if (isAuto()) return autoPick(engineSel[tab] === 'auto-premium');
+    const list = enginesFor();
+    return list.find((e) => e.id === engineSel[tab]) || list[0] || null;
+  };
   const kindNow = () => (tab === 'image' ? 't2i' : vmode === 't2v' ? 't2v' : 'i2v');
 
   /* ----- champs ----- */
@@ -42,7 +56,7 @@ export function mount(root, qs) {
   const charSel = h('select', {}, h('option', { value: '' }, 'Aucun personnage'));
   const countSel = h('select', { 'aria-label': 'Nombre de générations' }, ...[1, 2, 3, 4].map((n) => h('option', { value: String(n) }, `x${n}`)));
   const inputField = assetField({ kind: 'image', label: 'Image de départ', onChange: () => syncConsent() });
-  const endField = assetField({ kind: 'image', label: 'Image de fin (facultative)', onChange: () => syncConsent() });
+  const endField = assetField({ kind: 'image', label: 'Image de fin (facultative)', onChange: () => { syncConsent(); renderModel(); updateCost(); } });
   const endWrap = h('div', { class: 'end-wrap', hidden: true }, endField.el, h('p', { class: 'hint' }, 'Verrouille la dernière image : formes et cadrage respectés, moins d’essais ratés.'));
   const consent = consentBox(`J'ai le droit d'utiliser cette image (visages réels : voir l'avertissement)`);
   const consentWrap = h('div', { hidden: true }, consent.el);
@@ -61,13 +75,22 @@ export function mount(root, qs) {
     const kind = tab === 'image' ? 'image' : 'video';
     const m = cat.models.find((x) => x.kind === kind);
     const e = engineNow();
-    modelName.textContent = e ? e.name : tab === 'image' ? 'Texte vers image' : vmode === 't2v' ? 'Texte vers vidéo' : 'Image vers vidéo';
-    modelSub.textContent = e ? `${e.vendor} · ✦ ${e.credits} crédit${e.credits > 1 ? 's' : ''}` : `${m ? m.name : 'Modèle'} · moteur ${cfg.backend === 'mock' ? 'de démonstration' : cfg.backend}`;
+    const c = e ? costNow() / Number(countSel.value || 1) : 0;
+    modelName.textContent = e ? `${isAuto() ? 'Auto → ' : ''}${e.name}` : tab === 'image' ? 'Texte vers image' : vmode === 't2v' ? 'Texte vers vidéo' : 'Image vers vidéo';
+    modelSub.textContent = e ? `${e.vendor} · ✦ ${c} crédit${c > 1 ? 's' : ''} (≈ ${(c / 100).toFixed(2).replace('.', ',')} $)` : `${m ? m.name : 'Modèle'} · moteur ${cfg.backend === 'mock' ? 'de démonstration' : cfg.backend}`;
     clear(enginePick);
     const list = enginesFor();
     enginePick.hidden = list.length < 2;
+    if (!enginePick.hidden) {
+      for (const [id, label, premium] of [['auto', 'Auto', false], ['auto-premium', 'Auto premium', true]]) {
+        const pick = autoPick(premium);
+        if (!pick || (premium && !list.some((x) => x.premium))) continue;
+        enginePick.appendChild(h('button', { type: 'button', role: 'radio', class: 'engine', 'aria-checked': String(engineSel[tab] === id), onclick: () => { engineSel[tab] = id; renderModel(); updateCost(); } },
+          h('b', {}, label), h('span', {}, `→ ${pick.name}`)));
+      }
+    }
     for (const x of list) {
-      enginePick.appendChild(h('button', { type: 'button', role: 'radio', class: 'engine', 'aria-checked': String(x.id === (e && e.id)), onclick: () => { engineSel[tab] = x.id; renderModel(); updateCost(); endWrap.hidden = !(kindNow() === 'i2v' && x.endImage); } },
+      enginePick.appendChild(h('button', { type: 'button', role: 'radio', class: 'engine', 'aria-checked': String(!isAuto() && x.id === (e && e.id)), onclick: () => { engineSel[tab] = x.id; renderModel(); updateCost(); endWrap.hidden = !(kindNow() === 'i2v' && x.endImage); } },
         h('b', {}, x.name), h('span', {}, `${x.tag ? `${x.tag} · ` : ''}✦ ${x.credits}`)));
     }
     clear(modelCanvasBox);
@@ -239,7 +262,7 @@ export function mount(root, qs) {
   }
   function setTab(t) { tab = t; clear(err); refresh(); }
   countSel.addEventListener('change', updateCost);
-  draft.addEventListener('change', updateCost);
+  draft.addEventListener('change', () => { renderModel(); updateCost(); });
 
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
@@ -248,7 +271,8 @@ export function mount(root, qs) {
     const base = { kind, params: { sizeId } };
     if (tab === 'video') { base.params.duration = duration; base.params.draft = draft.checked; }
     const eng = engineNow();
-    if (eng) base.params.engine = eng.id;
+    if (eng) base.params.engine = isAuto() ? 'auto' : eng.id;
+    if (eng && engineSel[tab] === 'auto-premium') base.params.quality = 'premium';
     if (template) { base.templateId = template.id; base.params.variables = { ...tplValues }; }
     else {
       const p = prompt.value.trim();

@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { cloud } from './env.ts';
-import { catalog, engineFor } from '../../api/src/catalog.ts';
+import { catalog, engineFor, DIRECT_KEYS, directReady, isDirect, engineUsable } from '../../api/src/catalog.ts';
+export { directReady, isDirect, engineUsable };
 import { loadWorkflow, renderWorkflow, injectLora } from '../../api/src/workflows.ts';
 import { workflowFor, wanLength } from '../../api/src/backends/comfyui.ts';
 import { config } from '../../api/src/config.ts';
@@ -12,12 +13,6 @@ import { buildGenRequest } from '../../api/src/exec.ts';
 // soumission → webhook du fournisseur (/api/webhooks/<fournisseur>) → clôture au prochain suivi du job.
 
 type Row = Record<string, any>;
-// Fournisseurs « directs » (chez l'éditeur du modèle, moins cher que fal) : clé(s) requise(s).
-const DIRECT_KEYS: Record<string, string[]> = {
-  modal: ['MODAL_TOKEN', 'MODAL_SUBMIT_URL', 'MODAL_STATUS_URL'], kling: ['KLING_API_KEY'], byteplus: ['ARK_API_KEY'], google: ['GEMINI_API_KEY'],
-};
-export const isDirect = (id: string) => id in DIRECT_KEYS;
-export const directReady = (id: string) => (DIRECT_KEYS[id] ?? []).every((k) => !!process.env[k]);
 export const isRemote = (id: string) => id === 'fal' || id === 'runpod' || isDirect(id);
 
 export const webhookSig = (jobId: string) => crypto.createHmac('sha256', cloud.serverSecret).update(`webhook:${jobId}`).digest('hex').slice(0, 32);
@@ -62,10 +57,6 @@ export function providerFor(job: Row, fallback: string): string {
   if (!e?.provider) return fallback;
   return directReady(e.provider) || !Object.keys(e.endpoints).length ? e.provider : 'fal';
 }
-
-/** Modèle proposable : moteur fal, ou fournisseur direct configuré, ou repli fal possible. */
-export const engineUsable = (e: { provider?: string; endpoints: Record<string, string> }) =>
-  !e.provider || directReady(e.provider) || Object.keys(e.endpoints).length > 0;
 
 const modalHeaders = () => {
   const token = process.env.MODAL_TOKEN;

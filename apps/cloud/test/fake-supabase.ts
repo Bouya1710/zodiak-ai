@@ -83,6 +83,7 @@ export async function startFakeSupabase() {
           if (a.p_op === 'update') { Object.assign(row, a.p_row); return json(res, 200, row); }
           if (a.p_op === 'delete') { t.splice(t.indexOf(row), 1); return json(res, 200, row); }
         }
+        if (name === 'app_spent_since') return json(res, 200, tables.jobs!.filter((r) => r.created_at >= a.p_since).reduce((n, r) => n + (r.cost ?? 0), 0));
         return json(res, 404, { message: 'unknown rpc' });
       }
       // ---- PostgREST (RLS : lignes du propriétaire)

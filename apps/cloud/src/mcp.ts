@@ -2,12 +2,12 @@
 // URL : /api/mcp/<clé> (ou /api/mcp avec « Authorization: Bearer <clé> »). La clé se crée sur la page Compte.
 import * as supa from './supa.ts';
 import type { Session } from './session.ts';
-import { createJob } from './jobs.ts';
+import { createJob, finalFromDraft } from './jobs.ts';
 import { reconcile } from './process.ts';
 import { isOwner, ownerReport } from './admin.ts';
 import { prepareUpload, resolveImage } from './inbox.ts';
 import { engineUsable, isDirect } from './providers.ts';
-import { catalog } from '../../api/src/catalog.ts';
+import { catalog, quote, type JobKind } from '../../api/src/catalog.ts';
 import { HttpError } from '../../api/src/ctx.ts';
 
 type Json = Record<string, any>;
@@ -29,7 +29,8 @@ const TOOLS = [
       properties: {
         type: { type: 'string', enum: ['image', 'video'] },
         prompt: { type: 'string', description: 'Description de la scène et du mouvement (anglais conseillé pour la vidéo).' },
-        modele: { type: 'string', description: 'Identifiant renvoyé par zodiak_modeles (sinon le modèle par défaut, gratuit).' },
+        modele: { type: 'string', description: "Identifiant renvoyé par zodiak_modeles, ou 'auto' (sinon le modèle par défaut, gratuit)." },
+        qualite: { type: 'string', enum: ['gratuit', 'premium'], description: "Avec modele='auto' : moteur gratuit du site ou modèle premium le moins cher." },
         image_debut: { type: 'string', description: 'Vidéo : image de départ (identifiant de galerie ou envoi_id).' },
         image_fin: { type: 'string', description: 'Vidéo : image de fin (identifiant de galerie ou envoi_id) ; modèles « debut_fin » uniquement.' },
         droits_image: { type: 'boolean', description: "Obligatoire si une image est envoyée : l'utilisateur confirme avoir le droit de l'utiliser (visages réels : accord de la personne)." },
@@ -39,6 +40,26 @@ const TOOLS = [
         image_id: { type: 'string', description: 'Ancien nom de image_debut (compatibilité).' },
       },
     },
+  },
+  {
+    name: 'zodiak_devis',
+    description: "Avant de lancer : modèle retenu et coût en crédits (1 crédit ≈ 0,01 $), sans rien débiter. modele='auto' choisit seul : brouillon → moteur gratuit du site ; sinon le moins cher du niveau (qualite).",
+    inputSchema: {
+      type: 'object', required: ['type'],
+      properties: {
+        type: { type: 'string', enum: ['image', 'video'] },
+        modele: { type: 'string', description: "Identifiant de zodiak_modeles ou 'auto' (défaut)." },
+        qualite: { type: 'string', enum: ['gratuit', 'premium'], description: "Avec modele='auto' : moteur gratuit du site ou modèle premium le moins cher." },
+        brouillon: { type: 'boolean' },
+        image_debut: { type: 'boolean', description: 'Vidéo à partir d’une image.' },
+        image_fin: { type: 'boolean', description: 'Avec une image de fin (seuls certains modèles).' },
+      },
+    },
+  },
+  {
+    name: 'zodiak_rendu_final',
+    description: "Relance un brouillon réussi en qualité finale (mêmes texte, images, cadrage et graine) et débite les crédits : annoncer le coût d'abord (zodiak_devis). Par défaut le même modèle en 720p ; qualite='premium' → modèle premium le moins cher ; ou modele précis.",
+    inputSchema: { type: 'object', required: ['job_id'], properties: { job_id: { type: 'string' }, modele: { type: 'string' }, qualite: { type: 'string', enum: ['gratuit', 'premium'] } } },
   },
   { name: 'zodiak_statut', description: "État d'une génération et liens de téléchargement du résultat (valables 1 h).", inputSchema: { type: 'object', required: ['job_id'], properties: { job_id: { type: 'string' } } } },
   { name: 'zodiak_creations', description: 'Dernières créations du compte avec leurs liens (valables 1 h).', inputSchema: { type: 'object', properties: { nombre: { type: 'integer', minimum: 1, maximum: 20 } } } },
@@ -57,6 +78,12 @@ async function jobReport(s: Session, row: Json) {
   return { job_id: row.id, statut: row.status, progression: row.progress, message: row.message, erreur: row.error ?? undefined, credits: row.cost, resultats: await links(s, ids) };
 }
 
+/** Attend jusqu'à ~90 s la fin d'une génération, sinon renvoie l'état à suivre avec zodiak_statut. */
+async function follow(s: Session, row: Json) {
+  for (let i = 0; i < 22 && ['queued', 'running'].includes(row.status); i++) { await sleep(4000); row = await reconcile(s, row); }
+  return jobReport(s, row);
+}
+
 async function call(s: Session, name: string, a: Json): Promise<unknown> {
   switch (name) {
     case 'zodiak_modeles':
@@ -64,7 +91,7 @@ async function call(s: Session, name: string, a: Json): Promise<unknown> {
         modeles: catalog.engines.filter(engineUsable).map((e) => ({
           id: e.id, nom: e.name, editeur: e.vendor, gratuit_pour_le_site: e.provider === 'modal',
           types: e.kinds.map((k) => (k === 't2i' ? 'image' : k === 'i2v' ? 'vidéo depuis image' : 'vidéo depuis texte')),
-          credits: e.credits, credits_brouillon: e.draftCredits ?? null, debut_fin: !!e.provider && isDirect(e.provider) && e.kinds.includes('i2v'),
+          credits: e.credits, credits_brouillon: e.draftCredits ?? null, premium: !!e.premium, debut_fin: !!e.provider && isDirect(e.provider) && e.kinds.includes('i2v'),
         })),
         formats: SIZES, presets: catalog.presets.map((p) => ({ id: p.id, nom: p.label })),
         note: "1 crédit ≈ 0,01 $. Méthode conseillée : brouillons sur un modèle gratuit (debut_fin), puis rendu final payant seulement si le brouillon convient.",
@@ -83,11 +110,17 @@ async function call(s: Session, name: string, a: Json): Promise<unknown> {
       const kind = !video ? 't2i' : start ? 'i2v' : 't2v';
       let row = await createJob(s, {
         kind, prompt: a.prompt, inputAssetId: start, endAssetId: end, consent, presetId: video ? a.preset : undefined,
-        params: { sizeId: a.format ?? (video ? 'landscape' : 'square'), engine: a.modele, ...(video ? { duration: 5, draft: a.brouillon === true } : {}) },
+        params: { sizeId: a.format ?? (video ? 'landscape' : 'square'), engine: a.modele, quality: a.qualite, ...(video ? { duration: 5, draft: a.brouillon === true } : {}) },
       });
-      for (let i = 0; i < 22 && ['queued', 'running'].includes(row.status); i++) { await sleep(4000); row = await reconcile(s, row); }
-      return jobReport(s, row);
+      return follow(s, row);
     }
+    case 'zodiak_devis': {
+      const kind: JobKind = a.type !== 'video' ? 't2i' : a.image_debut ? 'i2v' : 't2v';
+      const q = quote(kind, { engine: a.modele ?? 'auto', quality: a.qualite, draft: a.type === 'video' && a.brouillon === true, endAssetId: a.image_fin ? 'oui' : undefined });
+      return { modele: q.engine, credits: q.credits, cout_estime_usd: q.credits / 100 };
+    }
+    case 'zodiak_rendu_final':
+      return follow(s, await finalFromDraft(s, String(a.job_id), { engine: a.modele, quality: a.qualite }));
     case 'zodiak_statut': {
       const j = (await supa.select('jobs', { id: `eq.${String(a.job_id)}`, select: '*' }, s.jwt))[0];
       if (!j) throw new HttpError(404, 'not_found', 'Génération introuvable');
@@ -121,7 +154,7 @@ export async function handleRpc(s: Session, msg: Json): Promise<Json | null> {
         protocolVersion: msg.params?.protocolVersion ?? '2025-06-18',
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'zodiak-ai', version: '1.0.0' },
-        instructions: "ZODIAK AI génère des images et des vidéos. Modèles gratuits pour le site : ZODIAK LTX-2.5 (par défaut) et ZODIAK Wan 2.2, avec image de début et de fin. Pour une image du poste : zodiak_preparer_envoi, exécuter la commande curl, puis zodiak_generer avec l'envoi_id. Annonce toujours le coût (zodiak_modeles) avant de lancer, et propose un brouillon avant un rendu payant.",
+        instructions: "ZODIAK AI génère des images et des vidéos. Modèles gratuits pour le site : ZODIAK LTX-2.5 (par défaut) et ZODIAK Wan 2.2, avec image de début et de fin. Pour une image du poste : zodiak_preparer_envoi, exécuter la commande curl, puis zodiak_generer avec l'envoi_id. Méthode : annonce le coût (zodiak_devis) avant de lancer ; brouillon gratuit d'abord (brouillon=true, modele='auto'), puis zodiak_rendu_final si le brouillon convient.",
       });
     case 'ping': return ok({});
     case 'tools/list': return ok({ tools: TOOLS });

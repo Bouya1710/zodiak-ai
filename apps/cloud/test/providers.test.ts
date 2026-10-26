@@ -83,3 +83,16 @@ test('suivi : en cours, terminé (lien vidéo) ou échec, pour chaque fournisseu
   assert.deepEqual(done, { state: 'done', url: 'data:video/mp4;base64,AAAA' });
   assert.deepEqual(parseDirectStatus('google', { status: 'failed', errors: [{ code: 'RESOURCE_EXHAUSTED', message: 'quota' }] }), { state: 'failed', error: 'Gemini : RESOURCE_EXHAUSTED quota' });
 });
+
+test('choix auto : brouillon → moteur gratuit du site ; premium → le moins cher ; image de fin → fournisseur direct', async () => {
+  const { autoEngine } = await import('../../api/src/catalog.ts');
+  Object.assign(process.env, { MODAL_TOKEN: 't', MODAL_SUBMIT_URL: 'u', MODAL_STATUS_URL: 'u', GEMINI_API_KEY: 'g' });
+  delete process.env.KLING_API_KEY; delete process.env.ARK_API_KEY;
+  assert.equal(autoEngine('i2v', { draft: true })?.id, 'zodiak-ltx');
+  assert.equal(autoEngine('i2v', {})?.id, 'zodiak-ltx');
+  assert.equal(autoEngine('i2v', { premium: true })?.id, 'kling-25');
+  assert.equal(autoEngine('i2v', { premium: true, endImage: true })?.id, 'omni-flash');
+  assert.equal(autoEngine('t2i', {})?.id, 'flux-schnell');
+  process.env.KLING_API_KEY = 'k';
+  assert.equal(autoEngine('i2v', { premium: true, endImage: true })?.id, 'kling-3');
+});

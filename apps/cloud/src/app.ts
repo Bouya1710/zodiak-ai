@@ -7,11 +7,11 @@ import { cloud, assertCloudEnv } from './env.ts';
 import * as supa from './supa.ts';
 import { sessionFrom, cookieFor, refreshProfile, type Session } from './session.ts';
 import { reconcile, ingest, backend } from './process.ts';
-import { createJob } from './jobs.ts';
+import { createJob, finalFromDraft } from './jobs.ts';
 import { webhookSig, resultUrlFromWebhook, engineUsable, isDirect } from './providers.ts';
 import { Router, RateLimiter, makeReq, send, type Req } from '../../api/src/http.ts';
 import { HttpError } from '../../api/src/ctx.ts';
-import { catalog } from '../../api/src/catalog.ts';
+import { catalog, quote, type JobKind } from '../../api/src/catalog.ts';
 import { NOTICES, checkPrompt, requireConsent } from '../../api/src/guardrails.ts';
 import { serializeJob } from '../../api/src/plan.ts';
 import { createToken, sessionFromToken } from './tokens.ts';
@@ -44,7 +44,7 @@ function build(): Router {
   R.get('/api/catalog', () => ({
     models: catalog.models, cameraPresets: catalog.presets, templates: catalog.templates,
     sizes: catalog.sizes.map(({ id, label, width, height }) => ({ id, label, width, height })), costs: catalog.costs,
-    engines: backend().id === 'fal' ? catalog.engines.filter(engineUsable).map(({ id, kinds, name, vendor, tag, credits, draftCredits, provider }) => ({ id, kinds, name, vendor, tag, credits, draftCredits, endImage: !!provider && isDirect(provider) })) : [],
+    engines: backend().id === 'fal' ? catalog.engines.filter(engineUsable).map(({ id, kinds, name, vendor, tag, credits, draftCredits, provider, premium }) => ({ id, kinds, name, vendor, tag, credits, draftCredits, premium: !!premium, endImage: !!provider && isDirect(provider) })) : [],
   }));
   R.get('/api/health', async () => { const db = await supa.ping(); return { ok: db, db, storage: db, backend: backend().id }; });
 
@@ -153,6 +153,23 @@ function build(): Router {
     const s = need(r);
     if (!limiter.check(`job:${s.user.id}`, 40, 60_000)) throw new HttpError(429, 'rate_limited', 'Trop de demandes, patientez un instant');
     send(r.res, 202, { job: serializeJob(await createJob(s, await r.json())) });
+    return undefined;
+  }));
+
+  // Devis avant lancement : modèle retenu (y compris « auto ») et coût, sans rien créer.
+  R.post('/api/quote', guard(async (r) => {
+    need(r);
+    const b = await r.json();
+    const kind = String(b.kind) as JobKind;
+    if (!['t2i', 'i2v', 't2v'].includes(kind)) throw new HttpError(422, 'invalid', 'Type inconnu');
+    return quote(kind, { ...(b.params ?? {}), endAssetId: b.endImage ? 'oui' : undefined });
+  }));
+
+  R.post('/api/jobs/:id/final', guard(async (r) => {
+    const s = need(r);
+    if (!limiter.check(`job:${s.user.id}`, 40, 60_000)) throw new HttpError(429, 'rate_limited', 'Trop de demandes, patientez un instant');
+    const b: Record<string, any> = await r.json().catch(() => ({}));
+    send(r.res, 202, { job: serializeJob(await finalFromDraft(s, r.params.id!, { engine: b.engine, quality: b.quality })) });
     return undefined;
   }));
 

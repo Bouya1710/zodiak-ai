@@ -1,9 +1,27 @@
 // Panneau « File de jobs » : statuts, progression, annulation, résultats.
 import { KIND_LABEL, STATUS_LABEL, isTerminal, truncate } from './lib.js';
-import { cancelJob, loadJobAssets, removeJob, setPanelOpen, state, subscribe } from './state.js';
+import { api } from './api.js';
+import { cancelJob, loadJobAssets, removeJob, setPanelOpen, state, subscribe, trackJob } from './state.js';
 import { clear, errorBox, h, openViewer, thumb } from './ui.js';
 
 /** @typedef {import('./lib.js').Job} Job */
+
+/**
+ * Rendu final proposé sous un brouillon terminé, coût affiché d'abord (même règle que le serveur).
+ * @param {Job} j
+ */
+function finalOptions(j) {
+  const p = /** @type {Record<string, any>} */ (j.params || {});
+  const engines = (state.catalog && state.catalog.engines) || [];
+  if (j.status !== 'done' || !p.draft || !engines.length) return [];
+  const list = engines.filter((e) => e.kinds.includes(j.kind) && (!p.endAssetId || e.endImage));
+  const same = list.find((e) => e.id === p.engine);
+  const prem = list.filter((e) => e.premium).sort((a, b) => a.credits - b.credits)[0];
+  return [
+    ...(same ? [{ label: 'Rendu final', credits: same.credits, body: {} }] : []),
+    ...(prem ? [{ label: `Final ${prem.name}`, credits: prem.credits, body: { quality: 'premium' } }] : []),
+  ];
+}
 
 /**
  * @param {HTMLElement} root
@@ -89,6 +107,19 @@ export function mountPanel(root) {
           } }, 'Annuler'),
         );
       } else {
+        for (const f of finalOptions(j)) {
+          actions.appendChild(h('button', { type: 'button', class: 'btn btn-small btn-primary', onclick: async (/** @type {Event} */ ev) => {
+            const b = /** @type {HTMLButtonElement} */ (ev.currentTarget);
+            b.disabled = true;
+            try {
+              trackJob((await api.finalJob(j.id, f.body)).job);
+            } catch (e) {
+              b.disabled = false;
+              clear(err);
+              err.appendChild(errorBox(e));
+            }
+          } }, `${f.label} ✦ ${f.credits}`));
+        }
         actions.appendChild(
           h('button', { type: 'button', class: 'btn btn-small btn-ghost', onclick: async () => {
             try {
