@@ -80,5 +80,5 @@ test('suivi : en cours, terminé (lien vidéo) ou échec, pour chaque fournisseu
   assert.deepEqual(parseDirectStatus('google', { status: 'in_progress' }), { state: 'pending' });
   const done = parseDirectStatus('google', { status: 'completed', steps: [{ type: 'thought' }, { type: 'model_output', content: [{ type: 'video', mime_type: 'video/mp4', data: 'AAAA' }] }] });
   assert.deepEqual(done, { state: 'done', url: 'data:video/mp4;base64,AAAA' });
-  assert.equal(parseDirectStatus('google', { status: 'failed', error: { message: 'x' } }).state, 'failed');
+  assert.deepEqual(parseDirectStatus('google', { status: 'failed', errors: [{ code: 'RESOURCE_EXHAUSTED', message: 'quota' }] }), { state: 'failed', error: 'Gemini : RESOURCE_EXHAUSTED quota' });
 });

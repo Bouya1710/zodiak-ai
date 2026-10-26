@@ -112,7 +112,8 @@ export function directBody(provider: string, job: Row, req: { prompt: string; ne
       if (job.kind === 't2i') return { url: `${GEMINI}/interactions`, body: { model: e?.model, input: req.prompt, background: true,
         response_format: { type: 'image', mime_type: 'image/jpeg', image_size: '1K', aspect_ratio: ratio(w, h, ['21:9', '16:9', '3:2', '4:3', '5:4', '1:1', '4:5', '3:4', '2:3', '9:16']) } } };
       const images = [o.startFile, o.endFile].filter(Boolean).map((f) => ({ type: 'image', ...b64(f!) }));
-      return { url: `${GEMINI}/interactions`, body: { model: e?.model, input: [...images, { type: 'text', text: req.prompt }], background: true,
+      // Omni n'a pas de champ durée : elle se donne dans le texte (vérifié le 26/10 : 5 s demandées → 5,0 s facturées).
+      return { url: `${GEMINI}/interactions`, body: { model: e?.model, input: [...images, { type: 'text', text: `${req.prompt} Duration: ${seconds} seconds.` }], background: true,
         response_format: { type: 'video', resolution: '720p', aspect_ratio: ratio(w, h, ['16:9', '9:16']) } } };
     }
   }
@@ -251,7 +252,8 @@ export function parseDirectStatus(provider: string, j: any): RemoteStatus {
     if (!url) return { state: 'failed', error: 'Gemini : aucun média en sortie' };
     return url.startsWith('data:') ? { state: 'done', url } : { state: 'done', url, headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY ?? '' } };
   }
-  return ['failed', 'cancelled'].includes(j?.status) ? { state: 'failed', error: `Gemini : ${j.error?.message ?? j.status}` } : { state: 'pending' };
+  const err = j?.errors?.[0] ?? j?.error;
+  return ['failed', 'cancelled'].includes(j?.status) ? { state: 'failed', error: `Gemini : ${err?.code ? `${err.code} ` : ''}${err?.message ?? j.status}` } : { state: 'pending' };
 }
 
 /** Extrait l'URL du résultat d'un corps de webhook (fal ou RunPod). */
