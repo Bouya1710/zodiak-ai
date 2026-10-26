@@ -52,6 +52,7 @@ test('Google : Nano Banana en image 1K, Omni en vidéo avec les deux images en b
   assert.equal(vid.body.background, true);
   assert.deepEqual(input.map((x) => x.type), ['image', 'image', 'text']);
   assert.equal(input[0].mime_type, 'image/png');
+  assert.equal(input[2].text, 'pipes glow Duration: 5 seconds.');
 });
 
 test('envoi : clé dans l’en-tête, identifiant de tâche, adresse de suivi ; erreurs remontées', async () => {
