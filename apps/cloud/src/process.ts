@@ -105,7 +105,7 @@ export async function processJob(s: Session, job: Row): Promise<void> {
         const p = JSON.parse(job.params);
         const signed = async (id: string | null | undefined) => (id ? supa.signedUrl(inputs.get(id)!.storage_key, s.jwt, 3600) : null);
         const startUrl = await signed(job.input_asset_id);
-        if (!startUrl) throw new Error('Le moteur ZODIAK demande une image de départ');
+        if (!startUrl && job.kind === 'i2v') throw new Error('Image de départ introuvable');
         const req = buildGenRequest(job, { backend: { id: provider } as never, inputPath: () => '', assetKind: () => 'image', character, workDir: '', signal: ac.signal, progress: () => {} });
         sub = await submitModal(job, req, { startUrl, endUrl: await signed(p.endAssetId) });
       } else {

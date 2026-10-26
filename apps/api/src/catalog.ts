@@ -8,7 +8,7 @@ export const JOB_KINDS: JobKind[] = ['t2i', 'i2v', 't2v', 'upscale', 'interpolat
 export interface SizeDef { id: string; label: string; width: number; height: number; video: { width: number; height: number; draft: { width: number; height: number } } }
 export interface CameraPreset { id: string; label: string; category: string; description: string; promptFragment: string; negativeFragment?: string; motion: string }
 // Modèle de génération distant (fal) : 1 crédit ≈ 0,01 $ de coût fournisseur.
-export interface Engine { id: string; kinds: JobKind[]; name: string; vendor: string; tag?: string; credits: number; draftCredits?: number; provider?: 'fal' | 'modal'; endpoints: Partial<Record<JobKind, string>>; note?: string }
+export interface Engine { id: string; kinds: JobKind[]; name: string; vendor: string; tag?: string; credits: number; draftCredits?: number; provider?: 'fal' | 'modal'; model?: string; endpoints: Partial<Record<JobKind, string>>; note?: string }
 export interface Template { id: string; label: string; kind: 't2i' | 'i2v' | 't2v'; description: string; promptTemplate: string; variables: { name: string; label: string; placeholder: string }[]; defaults: Record<string, unknown> }
 
 function readJson<T>(dir: string, file: string): T {

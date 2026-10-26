@@ -66,7 +66,7 @@ class Ltx:
         print(f"LTX-2.5 chargé en {self.load_s:.0f} s")
 
     @modal.method()
-    def generate(self, start: bytes, prompt: str, end: bytes | None = None, negative: str = "",
+    def generate(self, start: bytes | None, prompt: str, end: bytes | None = None, negative: str = "",
                  resolution: str = "720p", seconds: float = 5.0, seed: int = 42) -> dict:
         import tempfile
 
@@ -78,12 +78,12 @@ class Ltx:
         t0 = time.time()
         w, h = SIZES.get(resolution, SIZES["720p"])
         frames = int(round(seconds * FPS / 8)) * 8 + 1  # LTX veut 8k+1 images
-        conditions = [LTX2VideoCondition(frames=_img(start, w, h), index=0, strength=1.0)]
+        conditions = [LTX2VideoCondition(frames=_img(start, w, h), index=0, strength=1.0)] if start else []
         if end:
             conditions.append(LTX2VideoCondition(frames=_img(end, w, h), index=-1, strength=1.0))
         # Réglages « distillés » de la fiche officielle : peu d'étapes, sans guidage.
         video, audio = self.pipe(
-            conditions=conditions, prompt=prompt, negative_prompt=negative or DEFAULT_NEGATIVE_PROMPT,
+            conditions=conditions or None, prompt=prompt, negative_prompt=negative or DEFAULT_NEGATIVE_PROMPT,
             width=w, height=h, num_frames=frames, frame_rate=float(FPS), sigmas=DISTILLED_SIGMA_VALUES,
             guidance_scale=1.0, stg_scale=0.0, modality_scale=1.0,
             audio_guidance_scale=1.0, audio_stg_scale=0.0, audio_modality_scale=1.0,

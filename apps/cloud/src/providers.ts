@@ -61,9 +61,9 @@ const modalHeaders = () => {
 };
 
 /** Moteur ZODIAK (modèles libres sur Modal, modal/zodiak_gpu.py) : images par liens signés, suivi par interrogation. */
-export async function submitModal(job: Row, req: { prompt: string; negative: string }, o: { startUrl: string; endUrl?: string | null }): Promise<{ ref: string; urls: Record<string, string> }> {
+export async function submitModal(job: Row, req: { prompt: string; negative: string }, o: { startUrl?: string | null; endUrl?: string | null }): Promise<{ ref: string; urls: Record<string, string> }> {
   const p = JSON.parse(job.params);
-  const body = { model: 'wan22-lightning', start_url: o.startUrl, end_url: o.endUrl ?? undefined, prompt: req.prompt, negative: req.negative,
+  const body = { model: engineFor(job.kind, p.engine)?.model ?? 'wan22-lightning', start_url: o.startUrl ?? undefined, end_url: o.endUrl ?? undefined, prompt: req.prompt, negative: req.negative,
     resolution: p.draft ? '480p' : '720p', seconds: Math.min(5, Number(p.duration) || 5), seed: p.seed };
   const res = await fetch(process.env.MODAL_SUBMIT_URL!, { method: 'POST', headers: modalHeaders(), body: JSON.stringify(body) });
   const j = (await res.json().catch(() => ({}))) as any;

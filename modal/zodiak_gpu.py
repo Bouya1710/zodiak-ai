@@ -151,15 +151,22 @@ def _fetch(url: str) -> bytes:
 @app.function(secrets=[modal.Secret.from_name("zodiak-modal")])
 @modal.fastapi_endpoint(method="POST")
 def submit(body: dict, authorization: str | None = Header(default=None)):
-    """Corps : {model, start_url, end_url?, prompt, negative?, resolution?, seconds?, seed?} → {id}.
+    """Corps : {model (wan22-lightning | ltx25), start_url?, end_url?, prompt, negative?, resolution?, seconds?, seed?} → {id}.
     Les images arrivent par lien signé : la limite de 4,5 Mo des fonctions Vercel ne s'applique pas."""
     _check(authorization)
-    if body.get("model", "wan22-lightning") != "wan22-lightning":
-        return {"error": f"modèle inconnu : {body.get('model')}"}
-    start = _fetch(body["start_url"])
+    model = body.get("model", "wan22-lightning")
+    if model not in ("wan22-lightning", "ltx25"):
+        return {"error": f"modèle inconnu : {model}"}
+    start = _fetch(body["start_url"]) if body.get("start_url") else None
     end = _fetch(body["end_url"]) if body.get("end_url") else None
-    call = Wan().generate.spawn(start, body["prompt"], end, body.get("negative", ""), body.get("resolution", "720p"),
-                                float(body.get("seconds", 5)), int(body.get("seed", 42)))
+    args = (start, body["prompt"], end, body.get("negative", ""), body.get("resolution", "720p"), float(body.get("seconds", 5)), int(body.get("seed", 42)))
+    if model == "ltx25":
+        # LTX-2.5 vit dans l'app « zodiak-ltx » (modal/zodiak_ltx.py) ; image de départ facultative (texte → vidéo).
+        call = modal.Cls.from_name("zodiak-ltx", "Ltx")().generate.spawn(*args)
+    else:
+        if start is None:
+            return {"error": "Wan demande une image de départ"}
+        call = Wan().generate.spawn(*args)
     return {"id": call.object_id}
 
 
