@@ -13,6 +13,7 @@ import { ffmpeg, makeThumb, probe } from '../../api/src/ffmpeg.ts';
 import { CanceledError } from '../../api/src/backends/types.ts';
 import { submitRemote, submitDirect, remoteStatus, isRemote, isDirect, providerFor } from './providers.ts';
 import { buildGenRequest } from '../../api/src/exec.ts';
+import { engineFor, nextFallback } from '../../api/src/catalog.ts';
 
 type Row = Record<string, any>;
 const iso = () => new Date().toISOString();
@@ -61,6 +62,26 @@ function fingerprint(job: Row, inputShas: string[], backendId: string): string {
   })).digest('hex');
 }
 
+/**
+ * Repli automatique : le fournisseur du modèle choisi refuse ou échoue → même demande sur le modèle suivant de
+ * `fallback` (catalog/engines.json), au plus 2 replis par job. Les crédits ne bougent pas (l'écart éventuel,
+ * plafonné par `nextFallback`, est absorbé par le site). Renvoie false s'il n'y a pas de repli possible.
+ */
+export async function retryWithFallback(s: Session, job: Row, reason: string): Promise<boolean> {
+  if (!['t2i', 'i2v', 't2v'].includes(job.kind)) return false;
+  const p = JSON.parse(job.params ?? '{}');
+  const tried: string[] = p.tried ?? [];
+  const cur = engineFor(job.kind, p.engine);
+  if (!cur || tried.length >= 2) return false;
+  const next = nextFallback(job.kind, cur, [...tried, cur.id], { endImage: !!p.endAssetId, draft: p.draft === true });
+  if (!next) return false;
+  const params = JSON.stringify({ ...p, engine: next.id, tried: [...tried, cur.id] });
+  console.error(`[repli] job ${job.id} : ${cur.id} → ${next.id} (${reason.slice(0, 160)})`);
+  await update(job.id, { params, status: 'running', provider: null, provider_ref: null, provider_urls: null, progress: 5, message: `Repli automatique : ${cur.name} indisponible, essai avec ${next.name}` });
+  await processJob(s, { ...job, params, status: 'running', provider: null, provider_ref: null, provider_urls: null });
+  return true;
+}
+
 /** Télécharge dans un dossier temporaire les médias dont le job a besoin. */
 async function fetchInputs(s: Session, job: Row, dir: string) {
   const p = JSON.parse(job.params);
@@ -82,6 +103,7 @@ export async function processJob(s: Session, job: Row): Promise<void> {
   fs.mkdirSync(dir, { recursive: true });
   const be = backend();
   const ac = new AbortController();
+  let submitting = false; // vrai pendant l'envoi au fournisseur : un échec à ce stade déclenche le repli
   try {
     await update(job.id, { status: 'running', started_at: iso(), progress: 3, message: 'Démarrage' });
     const inputs = await fetchInputs(s, job, dir);
@@ -99,6 +121,7 @@ export async function processJob(s: Session, job: Row): Promise<void> {
 
     const provider = providerFor(job, be.id);
     if (isRemote(provider) && ['t2i', 'i2v', 't2v'].includes(job.kind)) {
+      submitting = true;
       let sub;
       if (isDirect(provider)) {
         // Le fournisseur télécharge lui-même les images (liens signés 1 h) : pas de limite de taille côté Vercel.
@@ -115,6 +138,7 @@ export async function processJob(s: Session, job: Row): Promise<void> {
         const ref = job.input_asset_id ? inputs.get(job.input_asset_id)?.file ?? null : null;
         sub = await submitRemote(provider, job, { character, inputPath: ref, jobId: job.id });
       }
+      submitting = false; // envoyé : plus de repli sur une simple erreur d'écriture en base
       await update(job.id, { provider, provider_ref: sub.ref, provider_urls: JSON.stringify(sub.urls), fingerprint: fp, progress: 10, message: provider === 'modal' ? 'Envoyé au moteur ZODIAK' : `Envoyé à ${provider}` });
       return; // la suite : webhook du fournisseur (ou interrogation lors du prochain suivi du job)
     }
@@ -129,6 +153,7 @@ export async function processJob(s: Session, job: Row): Promise<void> {
     await finalize(s, job, out, fp);
   } catch (e) {
     if (e instanceof CanceledError) await fail(s, job, 'canceled', null, 'Annulé');
+    else if (submitting && await retryWithFallback(s, job, (e as Error).message).catch(() => false)) return;
     else await fail(s, job, 'failed', (e as Error).message.slice(0, 500), 'Échec');
   } finally {
     try { fs.rmSync(dir, { recursive: true, force: true }); } catch { /* ok */ }
@@ -162,8 +187,14 @@ export async function reconcile(s: Session, job: Row): Promise<Row> {
   const age = Date.now() - new Date(job.started_at ?? job.created_at).getTime();
   if (job.provider && job.provider_ref) {
     const st = await remoteStatus(job.provider, job).catch((e) => ({ state: 'failed' as const, error: (e as Error).message }));
-    if (st.state === 'failed') await fail(s, job, 'failed', (st.error ?? 'Échec du fournisseur').slice(0, 500), 'Échec');
-    else if (st.state === 'done') {
+    if (st.state === 'failed') {
+      // Un seul suivi à la fois relance : on relit le job et on vérifie qu'il n'a pas déjà été relancé par un autre suivi.
+      const cur = await supa.write('get', 'jobs', {}, job.id);
+      const same = cur?.status === 'running' && cur.provider_ref === job.provider_ref;
+      if (!same || !(await retryWithFallback(s, job, st.error ?? '').catch(() => false))) {
+        if (same) await fail(s, job, 'failed', (st.error ?? 'Échec du fournisseur').slice(0, 500), 'Échec');
+      }
+    } else if (st.state === 'done') {
       const dir = path.join(os.tmpdir(), 'zodiak-jobs', job.id);
       fs.mkdirSync(dir, { recursive: true });
       try {

@@ -8,7 +8,7 @@ export const JOB_KINDS: JobKind[] = ['t2i', 'i2v', 't2v', 'upscale', 'interpolat
 export interface SizeDef { id: string; label: string; width: number; height: number; video: { width: number; height: number; draft: { width: number; height: number } } }
 export interface CameraPreset { id: string; label: string; category: string; description: string; promptFragment: string; negativeFragment?: string; motion: string }
 // Modèle de génération distant (fal) : 1 crédit ≈ 0,01 $ de coût fournisseur.
-export interface Engine { id: string; kinds: JobKind[]; name: string; vendor: string; tag?: string; credits: number; draftCredits?: number; provider?: 'fal' | 'modal' | 'kling' | 'byteplus' | 'google' | 'kie'; model?: string; premium?: boolean; endpoints: Partial<Record<JobKind, string>>; note?: string }
+export interface Engine { id: string; kinds: JobKind[]; name: string; vendor: string; tag?: string; credits: number; draftCredits?: number; provider?: 'fal' | 'modal' | 'kling' | 'byteplus' | 'google' | 'kie'; model?: string; premium?: boolean; fallback?: string[]; endpoints: Partial<Record<JobKind, string>>; note?: string }
 export interface Template { id: string; label: string; kind: 't2i' | 'i2v' | 't2v'; description: string; promptTemplate: string; variables: { name: string; label: string; placeholder: string }[]; defaults: Record<string, unknown> }
 
 function readJson<T>(dir: string, file: string): T {
@@ -64,6 +64,21 @@ export function autoEngine(kind: JobKind, o: { draft?: boolean; endImage?: boole
   const pick = o.draft ? list.filter((e) => e.draftCredits) : o.premium ? list.filter((e) => e.premium) : list;
   const price = (e: Engine) => (o.draft && e.draftCredits ? e.draftCredits : e.credits);
   return [...(pick.length ? pick : list)].sort((a, b) => price(a) - price(b))[0] ?? null;
+}
+
+/** Repli quand un fournisseur tombe : premier modèle de `fallback` utilisable pour ce type de job, pas déjà essayé,
+ *  et dont le prix ne dépasse pas celui du modèle d'origine de plus de ×1,6 ou +10 crédits (≈ 0,10 $, absorbé par le site). */
+export function nextFallback(kind: JobKind, cur: Engine, tried: string[], o: { endImage?: boolean; draft?: boolean } = {}, c: Catalog = catalog): Engine | null {
+  const price = (e: Engine) => (o.draft && e.draftCredits ? e.draftCredits : e.credits);
+  const base = price(cur);
+  for (const id of cur.fallback ?? []) {
+    const e = c.engines.find((x) => x.id === id);
+    if (!e || tried.includes(e.id) || !e.kinds.includes(kind) || !engineUsable(e)) continue;
+    if (o.endImage && !(e.provider && isDirect(e.provider))) continue;
+    if (price(e) > Math.max(base * 1.6, base + 10)) continue;
+    return e;
+  }
+  return null;
 }
 
 /** Modèle retenu pour une demande : « auto » (avec quality = premium | gratuit) ou un identifiant du catalogue. */

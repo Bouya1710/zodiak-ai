@@ -58,3 +58,13 @@ Prises sans attendre votre retour, comme demandé. Chacune est réversible sauf 
 | D-043 | **Coût de la vitrine** : ≈ 0,41 $ par clip (0,08 $ × 5,06 s + 0,003 $), 14 clips ≈ 5,7 $ (≈ 7,1 $ avec marge de relance) | — | Estimation annoncée avant lancement |
 | D-044 | **Génération pilotée par `scripts/generate-showcase.mjs`** (prompts versionnés dans `scripts/showcase-clips.mjs`, estimation sans `--run`) ; en ligne, la fonction `api/showcase-gen.js` fait les étapes (soumission, suivi, compression, envoi) sous jeton `SHOWCASE_TOKEN`, car l'environnement de développement n'atteint pas fal | Exécution locale seule | Pas de clé ni de réseau fal dans l'atelier |
 | D-045 | **Envoi par fonction Edge Supabase `showcase-upload`** (clé de service gardée côté Supabase ; seul le hash SHA-256 du jeton est dans le code) | Clé de service dans Vercel | Moindre exposition d'un secret |
+
+## Fournisseurs vidéo et repli (26/10/2026)
+
+| # | Décision | Alternatives écartées | Raison |
+|---|---|---|---|
+| D-060 | **Sora écarté** | Passer par un revendeur Sora | API arrêtée par OpenAI le 24/09/2026 |
+| D-061 | **Kling 3.0 et Seedance 2.0 restent chez Kie.ai** ; LTX-2.5 (Modal) reste le moteur gratuit et de brouillon | Kling direct (pack minimum 700 $), BytePlus direct (plus cher), fal (2 à 4× plus cher, masqué) | Kie.ai est au plancher du marché pour Kling 3.0 (0,07 $/s contre 0,071–0,084 chez les autres revendeurs) ; voir COMPARATIF-FOURNISSEURS.md |
+| D-062 | **Repli automatique entre modèles** (`fallback` dans `engines.json`, 2 replis max, écart de prix plafonné à ×1,6 ou +10 crédits, sans nouveau débit) | Échec + remboursement seul | Un fournisseur qui tombe ne doit pas faire perdre la génération ; l'écart absorbé reste borné à ≈ 0,10 $ |
+| D-063 | **Pas de VPN ni de prix régionaux dans le produit** | Abonnements d'appli Kling à 1 $ (Inde, Turquie) | Pas d'API, revente et partage de compte interdits, risque de bannissement ; usage personnel laissé au choix de Mahjoub |
+| D-064 | **Nouveaux revendeurs (Atlas Cloud, WaveSpeed, APIsRouter, EvoLink) non branchés** | Les écrire sans test | Aucun compte ni clé pour les tester (même règle que D-025) |

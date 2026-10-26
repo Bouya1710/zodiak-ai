@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { directBody, submitDirect, parseDirectStatus, providerFor, engineUsable } from '../src/providers.ts';
-import { catalog } from '../../api/src/catalog.ts';
+import { catalog, nextFallback, engineFor } from '../../api/src/catalog.ts';
 
 // Fournisseurs directs (Kling, BytePlus, Google) : corps de requête et lecture des états, sans aucun appel réel.
 const job = (kind: string, engine: string, extra: Record<string, unknown> = {}) =>
@@ -98,4 +98,21 @@ test('choix auto : brouillon → moteur gratuit du site ; premium → le moins c
   process.env.FAL_ENABLED = 'true';
   assert.equal(autoEngine('t2i', {})?.id, 'flux-schnell');
   delete process.env.FAL_ENABLED;
+});
+
+test('repli : premier modèle utilisable, jamais déjà essayé, prix plafonné ; image de fin = fournisseur direct', () => {
+  process.env.KIE_API_KEY = 'k'; process.env.GEMINI_API_KEY = 'g'; delete process.env.FAL_ENABLED;
+  const kling = engineFor('i2v', 'kling-3')!;
+  // kling-25 est sur fal (masqué) : on saute à Omni Flash (56 ≤ max(39×1,6 ; 39+10) = 62,4)
+  assert.equal(nextFallback('i2v', kling, ['kling-3'])?.id, 'omni-flash');
+  assert.equal(nextFallback('i2v', kling, ['kling-3', 'omni-flash']), null);
+  process.env.FAL_ENABLED = 'true';
+  assert.equal(nextFallback('i2v', kling, ['kling-3'])?.id, 'kling-25');
+  assert.equal(nextFallback('i2v', kling, ['kling-3'], { endImage: true })?.id, 'omni-flash'); // fal : pas d'image de fin
+  // Seedance (69) → Kling (39) et Omni (56) sont moins chers : acceptés
+  assert.equal(nextFallback('i2v', engineFor('i2v', 'seedance-2')!, ['seedance-2'])?.id, 'kling-3');
+  // plafond : Kling (39) ne peut pas replier sur un modèle à 69 crédits
+  const cheap = { ...kling, fallback: ['seedance-2'] };
+  assert.equal(nextFallback('i2v', cheap, ['kling-3']), null);
+  delete process.env.FAL_ENABLED; delete process.env.KIE_API_KEY; delete process.env.GEMINI_API_KEY;
 });
