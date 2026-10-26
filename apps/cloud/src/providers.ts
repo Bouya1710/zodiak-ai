@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import crypto from 'node:crypto';
 import { cloud } from './env.ts';
-import { catalog, engineFor, DIRECT_KEYS, directReady, isDirect, engineUsable } from '../../api/src/catalog.ts';
+import { catalog, engineFor, DIRECT_KEYS, directReady, isDirect, engineUsable, falEnabled } from '../../api/src/catalog.ts';
 export { directReady, isDirect, engineUsable };
 import { loadWorkflow, renderWorkflow, injectLora } from '../../api/src/workflows.ts';
 import { workflowFor, wanLength } from '../../api/src/backends/comfyui.ts';
@@ -55,7 +55,7 @@ export function providerFor(job: Row, fallback: string): string {
   const id = JSON.parse(job.params ?? '{}').engine; // posé seulement quand le site tourne avec des modèles distants
   const e = id ? engineFor(job.kind, id) : null;
   if (!e?.provider) return fallback;
-  return directReady(e.provider) || !Object.keys(e.endpoints).length ? e.provider : 'fal';
+  return directReady(e.provider) || !falEnabled() || !Object.keys(e.endpoints).length ? e.provider : 'fal';
 }
 
 const modalHeaders = () => {
@@ -67,12 +67,16 @@ const modalHeaders = () => {
 const KLING = 'https://api-singapore.klingai.com';
 const ARK = 'https://ark.ap-southeast.bytepluses.com/api/v3';
 const GEMINI = 'https://generativelanguage.googleapis.com/v1beta';
+const KIE = 'https://api.kie.ai/api/v1/jobs';
 const bearer = (key: string) => ({ authorization: `Bearer ${process.env[key]}`, 'content-type': 'application/json' });
 const googleHeaders = () => ({ 'x-goog-api-key': process.env.GEMINI_API_KEY!, 'content-type': 'application/json' });
 const b64 = (file: string) => {
   const buf = fs.readFileSync(file);
   return { data: buf.toString('base64'), mime_type: buf[0] === 0xff ? 'image/jpeg' : buf[0] === 0x52 ? 'image/webp' : 'image/png' };
 };
+
+const directHeaders = (provider: string) =>
+  provider === 'modal' ? modalHeaders() : provider === 'kling' ? bearer('KLING_API_KEY') : provider === 'byteplus' ? bearer('ARK_API_KEY') : provider === 'kie' ? bearer('KIE_API_KEY') : googleHeaders();
 
 export type DirectInputs = { startUrl?: string | null; endUrl?: string | null; startFile?: string | null; endFile?: string | null };
 
@@ -99,6 +103,19 @@ export function directBody(provider: string, job: Row, req: { prompt: string; ne
       return { url: `${ARK}/contents/generations/tasks`, body: { model: e?.model, content, resolution: '720p', duration: Math.max(4, seconds), generate_audio: true, watermark: false,
         ratio: o.startUrl ? 'adaptive' : ratio(w, h, ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9']) } };
     }
+    case 'kie': { // revendeur : Kling 3.0 (« kling-3.0/video ») et Seedance 2.0 (« bytedance/seedance-2 »), une seule API
+      if (e?.model?.startsWith('kling')) {
+        const input: Record<string, unknown> = { prompt: req.prompt, sound: false, duration: String(Math.max(3, seconds)), mode: 'std', multi_shots: false };
+        if (o.startUrl) input.image_urls = [o.startUrl, ...(o.endUrl ? [o.endUrl] : [])];
+        else input.aspect_ratio = ratio(w, h, ['16:9', '9:16', '1:1']);
+        return { url: `${KIE}/createTask`, body: { model: e.model, input } };
+      }
+      return { url: `${KIE}/createTask`, body: { model: e?.model, input: {
+        prompt: req.prompt, resolution: '720p', duration: Math.max(4, seconds), generate_audio: true,
+        aspect_ratio: o.startUrl ? 'adaptive' : ratio(w, h, ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9']),
+        ...(o.startUrl ? { first_frame_url: o.startUrl } : {}), ...(o.endUrl ? { last_frame_url: o.endUrl } : {}),
+      } } };
+    }
     default: { // google (Interactions API) : image (Nano Banana) ou vidéo (Omni), en arrière-plan
       if (job.kind === 't2i') return { url: `${GEMINI}/interactions`, body: { model: e?.model, input: req.prompt, background: true,
         response_format: { type: 'image', mime_type: 'image/jpeg', image_size: '1K', aspect_ratio: ratio(w, h, ['21:9', '16:9', '3:2', '4:3', '5:4', '1:1', '4:5', '3:4', '2:3', '9:16']) } } };
@@ -115,14 +132,16 @@ export async function submitDirect(provider: string, job: Row, req: { prompt: st
   if (!directReady(provider)) throw new Error(`${provider} : clé manquante (${DIRECT_KEYS[provider]!.join(', ')})`);
   if (job.kind === 'i2v' && provider === 'kling' && !o.startUrl) throw new Error('Kling : image de départ requise');
   const { url, body } = directBody(provider, job, req, o);
-  const headers = provider === 'modal' ? modalHeaders() : provider === 'kling' ? bearer('KLING_API_KEY') : provider === 'byteplus' ? bearer('ARK_API_KEY') : googleHeaders();
+  const headers = directHeaders(provider);
   const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
   const j = (await res.json().catch(() => ({}))) as any;
-  const id = provider === 'kling' ? j.data?.id : j.id;
-  if (!res.ok || !id || (provider === 'kling' && j.code !== 0)) throw new Error(`${provider} : ${String(j.error?.message ?? j.error ?? j.message ?? j.detail ?? res.status).slice(0, 200)}`);
+  const id = provider === 'kling' ? j.data?.id : provider === 'kie' ? j.data?.taskId : j.id;
+  const bad = (provider === 'kling' && j.code !== 0) || (provider === 'kie' && j.code !== 200); // HTTP 200 même en cas d'échec
+  if (!res.ok || !id || bad) throw new Error(`${provider} : ${String(j.error?.message ?? j.error ?? j.msg ?? j.message ?? j.detail ?? res.status).slice(0, 200)}`);
   const status = provider === 'modal' ? `${process.env.MODAL_STATUS_URL}?id=${encodeURIComponent(id)}`
     : provider === 'kling' ? `${KLING}/tasks?task_ids=${encodeURIComponent(id)}`
-    : provider === 'byteplus' ? `${ARK}/contents/generations/tasks/${encodeURIComponent(id)}` : `${GEMINI}/interactions/${encodeURIComponent(id)}`;
+    : provider === 'byteplus' ? `${ARK}/contents/generations/tasks/${encodeURIComponent(id)}`
+    : provider === 'kie' ? `${KIE}/recordInfo?taskId=${encodeURIComponent(id)}` : `${GEMINI}/interactions/${encodeURIComponent(id)}`;
   return { ref: id, urls: { status } };
 }
 
@@ -197,9 +216,8 @@ export async function remoteStatus(provider: string, job: Row): Promise<RemoteSt
     if (!res.ok) return { state: 'failed', error: `Modal : ${res.status}` };
     return st.state === 'failed' ? { state: 'failed', error: String(st.error ?? 'échec du GPU') } : { state: 'pending' };
   }
-  if (provider === 'kling' || provider === 'byteplus' || provider === 'google') {
-    const headers = provider === 'kling' ? bearer('KLING_API_KEY') : provider === 'byteplus' ? bearer('ARK_API_KEY') : googleHeaders();
-    const res = await fetch(urls.status!, { headers });
+  if (provider === 'kling' || provider === 'byteplus' || provider === 'google' || provider === 'kie') {
+    const res = await fetch(urls.status!, { headers: directHeaders(provider) });
     const j = (await res.json().catch(() => ({}))) as any;
     if (!res.ok) return { state: 'failed', error: `${provider} : ${String(j.error?.message ?? j.message ?? res.status).slice(0, 200)}` };
     return parseDirectStatus(provider, j);
@@ -233,6 +251,15 @@ export function parseDirectStatus(provider: string, j: any): RemoteStatus {
       return url ? { state: 'done', url } : { state: 'failed', error: 'Kling : aucune vidéo en sortie' };
     }
     return t?.status === 'failed' ? { state: 'failed', error: `Kling : ${t.message ?? 'échec'}` } : { state: 'pending' };
+  }
+  if (provider === 'kie') {
+    const t = j?.data;
+    if (j?.code !== 200) return { state: 'failed', error: `Kie.ai : ${j?.msg ?? 'erreur'}` };
+    if (t?.state === 'success') {
+      const url = (() => { try { return JSON.parse(t.resultJson ?? '{}').resultUrls?.[0]; } catch { return null; } })();
+      return url ? { state: 'done', url } : { state: 'failed', error: 'Kie.ai : aucune vidéo en sortie' };
+    }
+    return t?.state === 'fail' ? { state: 'failed', error: `Kie.ai : ${t.failMsg || t.failCode || 'échec'}` } : { state: 'pending' };
   }
   if (provider === 'byteplus') {
     if (j?.status === 'succeeded') return j.content?.video_url ? { state: 'done', url: j.content.video_url } : { state: 'failed', error: 'Seedance : aucune vidéo en sortie' };

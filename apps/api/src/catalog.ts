@@ -8,7 +8,7 @@ export const JOB_KINDS: JobKind[] = ['t2i', 'i2v', 't2v', 'upscale', 'interpolat
 export interface SizeDef { id: string; label: string; width: number; height: number; video: { width: number; height: number; draft: { width: number; height: number } } }
 export interface CameraPreset { id: string; label: string; category: string; description: string; promptFragment: string; negativeFragment?: string; motion: string }
 // Modèle de génération distant (fal) : 1 crédit ≈ 0,01 $ de coût fournisseur.
-export interface Engine { id: string; kinds: JobKind[]; name: string; vendor: string; tag?: string; credits: number; draftCredits?: number; provider?: 'fal' | 'modal' | 'kling' | 'byteplus' | 'google'; model?: string; premium?: boolean; endpoints: Partial<Record<JobKind, string>>; note?: string }
+export interface Engine { id: string; kinds: JobKind[]; name: string; vendor: string; tag?: string; credits: number; draftCredits?: number; provider?: 'fal' | 'modal' | 'kling' | 'byteplus' | 'google' | 'kie'; model?: string; premium?: boolean; endpoints: Partial<Record<JobKind, string>>; note?: string }
 export interface Template { id: string; label: string; kind: 't2i' | 'i2v' | 't2v'; description: string; promptTemplate: string; variables: { name: string; label: string; placeholder: string }[]; defaults: Record<string, unknown> }
 
 function readJson<T>(dir: string, file: string): T {
@@ -42,17 +42,20 @@ export const catalog: Catalog = loadCatalog();
 /** Modèle choisi pour ce type de job (le premier du catalogue par défaut), ou null si aucun. */
 export function engineFor(kind: JobKind, id: unknown, c: Catalog = catalog): Engine | null {
   const list = c.engines.filter((e) => e.kinds.includes(kind));
-  return list.find((e) => e.id === id) ?? list[0] ?? null;
+  return list.find((e) => e.id === id) ?? list.find(engineUsable) ?? list[0] ?? null;
 }
 
 // Fournisseurs « directs » (chez l'éditeur du modèle, moins cher que fal) : clé(s) requise(s).
 export const DIRECT_KEYS: Record<string, string[]> = {
-  modal: ['MODAL_TOKEN', 'MODAL_SUBMIT_URL', 'MODAL_STATUS_URL'], kling: ['KLING_API_KEY'], byteplus: ['ARK_API_KEY'], google: ['GEMINI_API_KEY'],
+  modal: ['MODAL_TOKEN', 'MODAL_SUBMIT_URL', 'MODAL_STATUS_URL'], kling: ['KLING_API_KEY'], byteplus: ['ARK_API_KEY'], google: ['GEMINI_API_KEY'], kie: ['KIE_API_KEY'],
 };
 export const isDirect = (id: string) => id in DIRECT_KEYS;
 export const directReady = (id: string) => (DIRECT_KEYS[id] ?? []).every((k) => !!process.env[k]);
-/** Modèle proposable : moteur fal, ou fournisseur direct configuré, ou repli fal possible. */
-export const engineUsable = (e: Pick<Engine, 'provider' | 'endpoints'>) => !e.provider || directReady(e.provider) || Object.keys(e.endpoints).length > 0;
+/** fal n'est proposé que s'il est activé (FAL_ENABLED=true) : plus cher que les éditeurs, et son solde peut être vide. */
+export const falEnabled = () => process.env.FAL_ENABLED === 'true';
+/** Modèle proposable : fournisseur direct configuré, ou modèle fal (y compris en repli) quand fal est activé. */
+export const engineUsable = (e: Pick<Engine, 'provider' | 'endpoints'>) =>
+  (e.provider && e.provider !== 'fal' ? directReady(e.provider) : false) || (falEnabled() && Object.keys(e.endpoints).length > 0);
 
 /** Choix automatique : brouillon → moteur du site le moins cher ; sinon le moins cher du niveau demandé (premium ou non).
  *  Une image de fin exige un fournisseur direct (fal ne la gère pas ici). */

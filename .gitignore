@@ -19,3 +19,4 @@ showcase-jobs.json
 .modal-token
 __pycache__/
 .gemini-key
+.kie-key

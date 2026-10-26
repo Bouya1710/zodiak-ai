@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { config } from './config.ts';
-import { catalog, costFor, resolveEngine, renderTemplate, resolveDims, JOB_KINDS, type JobKind } from './catalog.ts';
+import { catalog, costFor, resolveEngine, engineUsable, renderTemplate, resolveDims, JOB_KINDS, type JobKind } from './catalog.ts';
 import { checkPrompt, requireConsent } from './guardrails.ts';
 import { HttpError } from './ctx.ts';
 import type { Row } from './db.ts';
@@ -171,6 +171,7 @@ export async function planJob(deps: PlanDeps, body: Record<string, any>): Promis
   if (config.backend === 'fal' && (kind === 't2i' || isVideo)) {
     params.quality = params.quality === 'premium' ? 'premium' : undefined;
     const engine = resolveEngine(kind, params);
+    if (engine && !engineUsable(engine)) bad(`Modèle indisponible pour le moment : ${engine.name}`);
     if (engine) params.engine = engine.id; else delete params.engine;
   } else delete params.engine;
 
