@@ -5,6 +5,7 @@ import type { Session } from './session.ts';
 import { createJob } from './jobs.ts';
 import { reconcile } from './process.ts';
 import { isOwner, ownerReport } from './admin.ts';
+import { prepareUpload, resolveImage } from './inbox.ts';
 import { catalog } from '../../api/src/catalog.ts';
 import { HttpError } from '../../api/src/ctx.ts';
 
@@ -15,17 +16,26 @@ const SIZES = catalog.sizes.map((s) => s.id);
 const TOOLS = [
   { name: 'zodiak_modeles', description: 'Liste les modèles de génération ZODIAK AI (images et vidéos), leur coût en crédits et les formats disponibles.', inputSchema: { type: 'object', properties: {} } },
   {
+    name: 'zodiak_preparer_envoi',
+    description: "Prépare l'envoi d'une image depuis le poste de l'utilisateur (image de début ou de fin). Renvoie un envoi_id et une commande curl à exécuter avec le chemin du fichier (lien privé, valable 2 h). Ensuite, passer l'envoi_id à zodiak_generer (image_debut ou image_fin).",
+    inputSchema: { type: 'object', required: ['fichier'], properties: { fichier: { type: 'string', description: 'Nom ou chemin du fichier (PNG, JPEG ou WebP), ex. ~/images/debut.png.' } } },
+  },
+  {
     name: 'zodiak_generer',
-    description: "Génère une image ou une vidéo avec ZODIAK AI et débite les crédits du compte. Attend jusqu'à ~90 s : si ce n'est pas fini, renvoie l'identifiant à suivre avec zodiak_statut.",
+    description: "Génère une image ou une vidéo avec ZODIAK AI et débite les crédits (annoncer le coût d'abord, voir zodiak_modeles). Vidéo : image_debut (et image_fin pour verrouiller la dernière image) acceptent un identifiant de galerie ou un envoi_id ; sans image_debut, la vidéo part du texte. brouillon=true : 480p, moins cher, pour valider avant le rendu final. Attend jusqu'à ~90 s, sinon renvoie l'identifiant à suivre avec zodiak_statut.",
     inputSchema: {
       type: 'object', required: ['type', 'prompt'],
       properties: {
         type: { type: 'string', enum: ['image', 'video'] },
-        prompt: { type: 'string', description: 'Description de la scène (en anglais de préférence pour les modèles vidéo).' },
-        modele: { type: 'string', description: 'Identifiant renvoyé par zodiak_modeles (sinon le modèle par défaut).' },
+        prompt: { type: 'string', description: 'Description de la scène et du mouvement (anglais conseillé pour la vidéo).' },
+        modele: { type: 'string', description: 'Identifiant renvoyé par zodiak_modeles (sinon le modèle par défaut, gratuit).' },
+        image_debut: { type: 'string', description: 'Vidéo : image de départ (identifiant de galerie ou envoi_id).' },
+        image_fin: { type: 'string', description: 'Vidéo : image de fin (identifiant de galerie ou envoi_id) ; modèles « debut_fin » uniquement.' },
+        droits_image: { type: 'boolean', description: "Obligatoire si une image est envoyée : l'utilisateur confirme avoir le droit de l'utiliser (visages réels : accord de la personne)." },
+        brouillon: { type: 'boolean', description: 'Vidéo : brouillon 480p, moins cher.' },
         format: { type: 'string', enum: SIZES, description: 'square, landscape, portrait ou cinema.' },
-        image_id: { type: 'string', description: "Vidéo à partir d'une image : identifiant d'une image de la galerie (voir zodiak_creations)." },
         preset: { type: 'string', enum: catalog.presets.map((p) => p.id), description: 'Mouvement de caméra (vidéo).' },
+        image_id: { type: 'string', description: 'Ancien nom de image_debut (compatibilité).' },
       },
     },
   },
@@ -50,15 +60,29 @@ async function call(s: Session, name: string, a: Json): Promise<unknown> {
   switch (name) {
     case 'zodiak_modeles':
       return {
-        modeles: catalog.engines.map((e) => ({ id: e.id, nom: e.name, editeur: e.vendor, types: e.kinds.map((k) => (k === 't2i' ? 'image' : k === 'i2v' ? 'vidéo depuis image' : 'vidéo depuis texte')), credits: e.credits })),
-        formats: SIZES, presets: catalog.presets.map((p) => ({ id: p.id, nom: p.label })), note: '1 crédit ≈ 0,01 $',
+        modeles: catalog.engines.map((e) => ({
+          id: e.id, nom: e.name, editeur: e.vendor, gratuit_pour_le_site: e.provider === 'modal',
+          types: e.kinds.map((k) => (k === 't2i' ? 'image' : k === 'i2v' ? 'vidéo depuis image' : 'vidéo depuis texte')),
+          credits: e.credits, credits_brouillon: e.draftCredits ?? null, debut_fin: e.provider === 'modal',
+        })),
+        formats: SIZES, presets: catalog.presets.map((p) => ({ id: p.id, nom: p.label })),
+        note: "1 crédit ≈ 0,01 $. Méthode conseillée : brouillons sur un modèle gratuit (debut_fin), puis rendu final payant seulement si le brouillon convient.",
       };
+    case 'zodiak_preparer_envoi': {
+      const u = await prepareUpload(s, String(a.fichier ?? 'image.png'));
+      const chemin = String(a.fichier ?? 'image.png').replace(/"/g, '');
+      return { envoi_id: u.envoi_id, commande: `curl -sS -X PUT -H "Content-Type: ${u.content_type}" --data-binary @"${chemin}" "${u.upload_url}"`, valable: '2 h', suite: "Après l'envoi, utiliser envoi_id comme image_debut ou image_fin dans zodiak_generer." };
+    }
     case 'zodiak_generer': {
       const video = a.type === 'video';
-      const kind = !video ? 't2i' : a.image_id ? 'i2v' : 't2v';
+      const consent = a.droits_image === true;
+      const start = video ? await resolveImage(s, a.image_debut ?? a.image_id, consent) : undefined;
+      const end = video ? await resolveImage(s, a.image_fin, consent) : undefined;
+      if (end && !start) throw new HttpError(422, 'invalid', 'Une image de fin demande aussi une image de début');
+      const kind = !video ? 't2i' : start ? 'i2v' : 't2v';
       let row = await createJob(s, {
-        kind, prompt: a.prompt, inputAssetId: a.image_id, presetId: video ? a.preset : undefined,
-        params: { sizeId: a.format ?? (video ? 'landscape' : 'square'), engine: a.modele, ...(video ? { duration: 5 } : {}) },
+        kind, prompt: a.prompt, inputAssetId: start, endAssetId: end, consent, presetId: video ? a.preset : undefined,
+        params: { sizeId: a.format ?? (video ? 'landscape' : 'square'), engine: a.modele, ...(video ? { duration: 5, draft: a.brouillon === true } : {}) },
       });
       for (let i = 0; i < 22 && ['queued', 'running'].includes(row.status); i++) { await sleep(4000); row = await reconcile(s, row); }
       return jobReport(s, row);
@@ -96,7 +120,7 @@ export async function handleRpc(s: Session, msg: Json): Promise<Json | null> {
         protocolVersion: msg.params?.protocolVersion ?? '2025-06-18',
         capabilities: { tools: { listChanged: false } },
         serverInfo: { name: 'zodiak-ai', version: '1.0.0' },
-        instructions: "ZODIAK AI génère des images et des vidéos (FLUX, Nano Banana, Wan 2.2, Kling). Chaque génération débite des crédits : annonce le coût (zodiak_modeles) avant d'en lancer plusieurs.",
+        instructions: "ZODIAK AI génère des images et des vidéos. Modèles gratuits pour le site : ZODIAK LTX-2.5 (par défaut) et ZODIAK Wan 2.2, avec image de début et de fin. Pour une image du poste : zodiak_preparer_envoi, exécuter la commande curl, puis zodiak_generer avec l'envoi_id. Annonce toujours le coût (zodiak_modeles) avant de lancer, et propose un brouillon avant un rendu payant.",
       });
     case 'ping': return ok({});
     case 'tools/list': return ok({ tools: TOOLS });

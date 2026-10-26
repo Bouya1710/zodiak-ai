@@ -150,6 +150,15 @@ export async function signedUrl(key: string, jwt: string, seconds = 3600): Promi
   return `${cloud.supabaseUrl}/storage/v1${j.signedURL}`;
 }
 
+/** Lien d'envoi signé (2 h) vers le dossier de l'utilisateur : le fichier part directement du poste, sans passer par Vercel. */
+export async function signedUploadUrl(key: string, jwt: string): Promise<string> {
+  const res = await check(await fetch(`${cloud.supabaseUrl}/storage/v1/object/upload/sign/${cloud.bucket}/${key.split('/').map(encodeURIComponent).join('/')}`, {
+    method: 'POST', headers: headers(jwt, { 'content-type': 'application/json' }), body: JSON.stringify({ expiresIn: 7200 }),
+  }));
+  const j = (await res.json()) as { url: string };
+  return `${cloud.supabaseUrl}/storage/v1${j.url}`;
+}
+
 export async function removeObjects(keys: string[], jwt: string): Promise<void> {
   const list = keys.filter(Boolean);
   if (!list.length) return;
