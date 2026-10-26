@@ -6,6 +6,7 @@ import { createJob } from './jobs.ts';
 import { reconcile } from './process.ts';
 import { isOwner, ownerReport } from './admin.ts';
 import { prepareUpload, resolveImage } from './inbox.ts';
+import { engineUsable, isDirect } from './providers.ts';
 import { catalog } from '../../api/src/catalog.ts';
 import { HttpError } from '../../api/src/ctx.ts';
 
@@ -60,10 +61,10 @@ async function call(s: Session, name: string, a: Json): Promise<unknown> {
   switch (name) {
     case 'zodiak_modeles':
       return {
-        modeles: catalog.engines.map((e) => ({
+        modeles: catalog.engines.filter(engineUsable).map((e) => ({
           id: e.id, nom: e.name, editeur: e.vendor, gratuit_pour_le_site: e.provider === 'modal',
           types: e.kinds.map((k) => (k === 't2i' ? 'image' : k === 'i2v' ? 'vidéo depuis image' : 'vidéo depuis texte')),
-          credits: e.credits, credits_brouillon: e.draftCredits ?? null, debut_fin: e.provider === 'modal',
+          credits: e.credits, credits_brouillon: e.draftCredits ?? null, debut_fin: !!e.provider && isDirect(e.provider) && e.kinds.includes('i2v'),
         })),
         formats: SIZES, presets: catalog.presets.map((p) => ({ id: p.id, nom: p.label })),
         note: "1 crédit ≈ 0,01 $. Méthode conseillée : brouillons sur un modèle gratuit (debut_fin), puis rendu final payant seulement si le brouillon convient.",

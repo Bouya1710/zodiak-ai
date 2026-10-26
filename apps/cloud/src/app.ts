@@ -8,7 +8,7 @@ import * as supa from './supa.ts';
 import { sessionFrom, cookieFor, refreshProfile, type Session } from './session.ts';
 import { reconcile, ingest, backend } from './process.ts';
 import { createJob } from './jobs.ts';
-import { webhookSig, resultUrlFromWebhook } from './providers.ts';
+import { webhookSig, resultUrlFromWebhook, engineUsable, isDirect } from './providers.ts';
 import { Router, RateLimiter, makeReq, send, type Req } from '../../api/src/http.ts';
 import { HttpError } from '../../api/src/ctx.ts';
 import { catalog } from '../../api/src/catalog.ts';
@@ -44,7 +44,7 @@ function build(): Router {
   R.get('/api/catalog', () => ({
     models: catalog.models, cameraPresets: catalog.presets, templates: catalog.templates,
     sizes: catalog.sizes.map(({ id, label, width, height }) => ({ id, label, width, height })), costs: catalog.costs,
-    engines: backend().id === 'fal' ? catalog.engines.map(({ id, kinds, name, vendor, tag, credits, draftCredits, provider }) => ({ id, kinds, name, vendor, tag, credits, draftCredits, endImage: provider === 'modal' })) : [],
+    engines: backend().id === 'fal' ? catalog.engines.filter(engineUsable).map(({ id, kinds, name, vendor, tag, credits, draftCredits, provider }) => ({ id, kinds, name, vendor, tag, credits, draftCredits, endImage: !!provider && isDirect(provider) })) : [],
   }));
   R.get('/api/health', async () => { const db = await supa.ping(); return { ok: db, db, storage: db, backend: backend().id }; });
 

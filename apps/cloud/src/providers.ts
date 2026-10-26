@@ -12,7 +12,13 @@ import { buildGenRequest } from '../../api/src/exec.ts';
 // soumission → webhook du fournisseur (/api/webhooks/<fournisseur>) → clôture au prochain suivi du job.
 
 type Row = Record<string, any>;
-export const isRemote = (id: string) => id === 'fal' || id === 'runpod' || id === 'modal';
+// Fournisseurs « directs » (chez l'éditeur du modèle, moins cher que fal) : clé(s) requise(s).
+const DIRECT_KEYS: Record<string, string[]> = {
+  modal: ['MODAL_TOKEN', 'MODAL_SUBMIT_URL', 'MODAL_STATUS_URL'], kling: ['KLING_API_KEY'], byteplus: ['ARK_API_KEY'], google: ['GEMINI_API_KEY'],
+};
+export const isDirect = (id: string) => id in DIRECT_KEYS;
+export const directReady = (id: string) => (DIRECT_KEYS[id] ?? []).every((k) => !!process.env[k]);
+export const isRemote = (id: string) => id === 'fal' || id === 'runpod' || isDirect(id);
 
 export const webhookSig = (jobId: string) => crypto.createHmac('sha256', cloud.serverSecret).update(`webhook:${jobId}`).digest('hex').slice(0, 32);
 const hookUrl = (provider: string, jobId: string) =>
@@ -48,11 +54,18 @@ export function falBody(engineId: string, kind: string, req: { prompt: string; n
   }
 }
 
-/** Fournisseur d'un job : celui du modèle choisi (catalogue), sinon le moteur par défaut du site. */
+/** Fournisseur d'un job : celui du modèle choisi (catalogue), sinon le moteur par défaut du site.
+ *  Fournisseur direct sans clé → repli sur fal si le modèle y a une adresse. */
 export function providerFor(job: Row, fallback: string): string {
-  const e = engineFor(job.kind, JSON.parse(job.params ?? '{}').engine);
-  return e?.provider ?? fallback;
+  const id = JSON.parse(job.params ?? '{}').engine; // posé seulement quand le site tourne avec des modèles distants
+  const e = id ? engineFor(job.kind, id) : null;
+  if (!e?.provider) return fallback;
+  return directReady(e.provider) || !Object.keys(e.endpoints).length ? e.provider : 'fal';
 }
+
+/** Modèle proposable : moteur fal, ou fournisseur direct configuré, ou repli fal possible. */
+export const engineUsable = (e: { provider?: string; endpoints: Record<string, string> }) =>
+  !e.provider || directReady(e.provider) || Object.keys(e.endpoints).length > 0;
 
 const modalHeaders = () => {
   const token = process.env.MODAL_TOKEN;
@@ -60,15 +73,76 @@ const modalHeaders = () => {
   return { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
 };
 
-/** Moteur ZODIAK (modèles libres sur Modal, modal/zodiak_gpu.py) : images par liens signés, suivi par interrogation. */
-export async function submitModal(job: Row, req: { prompt: string; negative: string }, o: { startUrl?: string | null; endUrl?: string | null }): Promise<{ ref: string; urls: Record<string, string> }> {
+const KLING = 'https://api-singapore.klingai.com';
+const ARK = 'https://ark.ap-southeast.bytepluses.com/api/v3';
+const GEMINI = 'https://generativelanguage.googleapis.com/v1beta';
+const bearer = (key: string) => ({ authorization: `Bearer ${process.env[key]}`, 'content-type': 'application/json' });
+const googleHeaders = () => ({ 'x-goog-api-key': process.env.GEMINI_API_KEY!, 'content-type': 'application/json' });
+const b64 = (file: string) => {
+  const buf = fs.readFileSync(file);
+  return { data: buf.toString('base64'), mime_type: buf[0] === 0xff ? 'image/jpeg' : buf[0] === 0x52 ? 'image/webp' : 'image/png' };
+};
+
+export type DirectInputs = { startUrl?: string | null; endUrl?: string | null; startFile?: string | null; endFile?: string | null };
+
+/** Corps de requête des fournisseurs directs (d'après leur documentation officielle du 26/10/2026). */
+export function directBody(provider: string, job: Row, req: { prompt: string; negative: string }, o: DirectInputs): { url: string; body: Record<string, unknown> } {
   const p = JSON.parse(job.params);
-  const body = { model: engineFor(job.kind, p.engine)?.model ?? 'wan22-lightning', start_url: o.startUrl ?? undefined, end_url: o.endUrl ?? undefined, prompt: req.prompt, negative: req.negative,
-    resolution: p.draft ? '480p' : '720p', seconds: Math.min(5, Number(p.duration) || 5), seed: p.seed };
-  const res = await fetch(process.env.MODAL_SUBMIT_URL!, { method: 'POST', headers: modalHeaders(), body: JSON.stringify(body) });
+  const e = engineFor(job.kind, p.engine);
+  const w = Number(p.width) || 1280, h = Number(p.height) || 720;
+  const seconds = Math.round(Math.min(5, Number(p.duration) || 5));
+  switch (provider) {
+    case 'modal':
+      return { url: process.env.MODAL_SUBMIT_URL!, body: { model: e?.model ?? 'wan22-lightning', start_url: o.startUrl ?? undefined, end_url: o.endUrl ?? undefined, prompt: req.prompt,
+        negative: req.negative, resolution: p.draft ? '480p' : '720p', seconds, seed: p.seed } };
+    case 'kling': { // API « nouvelle génération » : pas de champ négatif, multi_shot vaut true par défaut
+      const settings = { resolution: '720p', duration: Math.max(3, seconds), audio: 'off', multi_shot: false };
+      if (job.kind === 't2v') return { url: `${KLING}/text-to-video/${e?.model}`, body: { prompt: req.prompt, settings: { ...settings, aspect_ratio: ratio(w, h, ['16:9', '9:16', '1:1']) } } };
+      const contents = [{ type: 'prompt', text: req.prompt }, { type: 'first_frame', url: o.startUrl }, ...(o.endUrl ? [{ type: 'last_frame', url: o.endUrl }] : [])];
+      return { url: `${KLING}/image-to-video/${e?.model}`, body: { contents, settings, options: { watermark_info: { enabled: false } } } };
+    }
+    case 'byteplus': {
+      const content: Record<string, unknown>[] = [{ type: 'text', text: req.prompt }];
+      if (o.startUrl) content.push({ type: 'image_url', image_url: { url: o.startUrl }, role: 'first_frame' });
+      if (o.endUrl) content.push({ type: 'image_url', image_url: { url: o.endUrl }, role: 'last_frame' });
+      return { url: `${ARK}/contents/generations/tasks`, body: { model: e?.model, content, resolution: '720p', duration: Math.max(4, seconds), generate_audio: true, watermark: false,
+        ratio: o.startUrl ? 'adaptive' : ratio(w, h, ['16:9', '4:3', '1:1', '3:4', '9:16', '21:9']) } };
+    }
+    default: { // google (Interactions API) : image (Nano Banana) ou vidéo (Omni), en arrière-plan
+      if (job.kind === 't2i') return { url: `${GEMINI}/interactions`, body: { model: e?.model, input: req.prompt, background: true,
+        response_format: { type: 'image', mime_type: 'image/jpeg', image_size: '1K', aspect_ratio: ratio(w, h, ['21:9', '16:9', '3:2', '4:3', '5:4', '1:1', '4:5', '3:4', '2:3', '9:16']) } } };
+      const images = [o.startFile, o.endFile].filter(Boolean).map((f) => ({ type: 'image', ...b64(f!) }));
+      return { url: `${GEMINI}/interactions`, body: { model: e?.model, input: [...images, { type: 'text', text: req.prompt }], background: true,
+        response_format: { type: 'video', resolution: '720p', aspect_ratio: ratio(w, h, ['16:9', '9:16']) } } };
+    }
+  }
+}
+
+/** Envoi chez un fournisseur direct : Modal, Kling, BytePlus (Seedance) ou Google (Gemini). Suivi par interrogation. */
+export async function submitDirect(provider: string, job: Row, req: { prompt: string; negative: string }, o: DirectInputs): Promise<{ ref: string; urls: Record<string, string> }> {
+  if (!directReady(provider)) throw new Error(`${provider} : clé manquante (${DIRECT_KEYS[provider]!.join(', ')})`);
+  if (job.kind === 'i2v' && provider === 'kling' && !o.startUrl) throw new Error('Kling : image de départ requise');
+  const { url, body } = directBody(provider, job, req, o);
+  const headers = provider === 'modal' ? modalHeaders() : provider === 'kling' ? bearer('KLING_API_KEY') : provider === 'byteplus' ? bearer('ARK_API_KEY') : googleHeaders();
+  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(body) });
   const j = (await res.json().catch(() => ({}))) as any;
-  if (!res.ok || !j.id) throw new Error(`Modal : ${String(j.error ?? j.detail ?? res.status).slice(0, 200)}`);
-  return { ref: j.id, urls: { status: `${process.env.MODAL_STATUS_URL}?id=${encodeURIComponent(j.id)}` } };
+  const id = provider === 'kling' ? j.data?.id : j.id;
+  if (!res.ok || !id || (provider === 'kling' && j.code !== 0)) throw new Error(`${provider} : ${String(j.error?.message ?? j.error ?? j.message ?? j.detail ?? res.status).slice(0, 200)}`);
+  const status = provider === 'modal' ? `${process.env.MODAL_STATUS_URL}?id=${encodeURIComponent(id)}`
+    : provider === 'kling' ? `${KLING}/tasks?task_ids=${encodeURIComponent(id)}`
+    : provider === 'byteplus' ? `${ARK}/contents/generations/tasks/${encodeURIComponent(id)}` : `${GEMINI}/interactions/${encodeURIComponent(id)}`;
+  return { ref: id, urls: { status } };
+}
+
+/** Média produit par Gemini : steps[] → model_output → image/vidéo (base64), rendu en lien data: pour le téléchargement. */
+export function googleMedia(j: any): string | null {
+  for (const step of j?.steps ?? []) {
+    if (step.type !== 'model_output') continue;
+    const c = (step.content ?? []).find((x: any) => (x.type === 'video' || x.type === 'image') && (x.data || x.uri));
+    if (c?.data) return `data:${c.mime_type ?? 'application/octet-stream'};base64,${c.data}`;
+    if (c?.uri) return c.uri;
+  }
+  return null;
 }
 
 export async function submitRemote(provider: string, job: Row, o: { character?: Row; inputPath: string | null; jobId: string }): Promise<{ ref: string; urls: Record<string, string> }> {
@@ -131,6 +205,13 @@ export async function remoteStatus(provider: string, job: Row): Promise<RemoteSt
     if (!res.ok) return { state: 'failed', error: `Modal : ${res.status}` };
     return st.state === 'failed' ? { state: 'failed', error: String(st.error ?? 'échec du GPU') } : { state: 'pending' };
   }
+  if (provider === 'kling' || provider === 'byteplus' || provider === 'google') {
+    const headers = provider === 'kling' ? bearer('KLING_API_KEY') : provider === 'byteplus' ? bearer('ARK_API_KEY') : googleHeaders();
+    const res = await fetch(urls.status!, { headers });
+    const j = (await res.json().catch(() => ({}))) as any;
+    if (!res.ok) return { state: 'failed', error: `${provider} : ${String(j.error?.message ?? j.message ?? res.status).slice(0, 200)}` };
+    return parseDirectStatus(provider, j);
+  }
   if (provider === 'fal') {
     const h = { authorization: `Key ${process.env.FAL_KEY}` };
     const st = (await (await fetch(urls.status!, { headers: h })).json()) as any;
@@ -149,6 +230,28 @@ export async function remoteStatus(provider: string, job: Row): Promise<RemoteSt
     return { state: 'failed', error: 'RunPod : sortie vide' };
   }
   return ['FAILED', 'CANCELLED', 'TIMED_OUT'].includes(st.status) ? { state: 'failed', error: `RunPod : ${st.status}` } : { state: 'pending' };
+}
+
+/** État d'une tâche Kling (GET /tasks), BytePlus (GET /contents/generations/tasks/{id}) ou Gemini (GET /interactions/{id}). */
+export function parseDirectStatus(provider: string, j: any): RemoteStatus {
+  if (provider === 'kling') {
+    const t = j?.data?.[0];
+    if (t?.status === 'succeeded') {
+      const url = (t.outputs ?? []).find((x: any) => x.type === 'video')?.url;
+      return url ? { state: 'done', url } : { state: 'failed', error: 'Kling : aucune vidéo en sortie' };
+    }
+    return t?.status === 'failed' ? { state: 'failed', error: `Kling : ${t.message ?? 'échec'}` } : { state: 'pending' };
+  }
+  if (provider === 'byteplus') {
+    if (j?.status === 'succeeded') return j.content?.video_url ? { state: 'done', url: j.content.video_url } : { state: 'failed', error: 'Seedance : aucune vidéo en sortie' };
+    return ['failed', 'expired', 'cancelled'].includes(j?.status) ? { state: 'failed', error: `Seedance : ${j.error?.message ?? j.status}` } : { state: 'pending' };
+  }
+  if (j?.status === 'completed') {
+    const url = googleMedia(j);
+    if (!url) return { state: 'failed', error: 'Gemini : aucun média en sortie' };
+    return url.startsWith('data:') ? { state: 'done', url } : { state: 'done', url, headers: { 'x-goog-api-key': process.env.GEMINI_API_KEY ?? '' } };
+  }
+  return ['failed', 'cancelled'].includes(j?.status) ? { state: 'failed', error: `Gemini : ${j.error?.message ?? j.status}` } : { state: 'pending' };
 }
 
 /** Extrait l'URL du résultat d'un corps de webhook (fal ou RunPod). */

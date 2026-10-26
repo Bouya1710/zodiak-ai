@@ -11,7 +11,7 @@ import { sniff, EXT } from '../../api/src/serialize.ts';
 import { isBlockedImage } from '../../api/src/safety.ts';
 import { ffmpeg, makeThumb, probe } from '../../api/src/ffmpeg.ts';
 import { CanceledError } from '../../api/src/backends/types.ts';
-import { submitRemote, submitModal, remoteStatus, isRemote, providerFor } from './providers.ts';
+import { submitRemote, submitDirect, remoteStatus, isRemote, isDirect, providerFor } from './providers.ts';
 import { buildGenRequest } from '../../api/src/exec.ts';
 
 type Row = Record<string, any>;
@@ -100,14 +100,17 @@ export async function processJob(s: Session, job: Row): Promise<void> {
     const provider = providerFor(job, be.id);
     if (isRemote(provider) && ['t2i', 'i2v', 't2v'].includes(job.kind)) {
       let sub;
-      if (provider === 'modal') {
-        // Le GPU télécharge lui-même les images (liens signés 1 h) : pas de limite de taille côté Vercel.
+      if (isDirect(provider)) {
+        // Le fournisseur télécharge lui-même les images (liens signés 1 h) : pas de limite de taille côté Vercel.
         const p = JSON.parse(job.params);
         const signed = async (id: string | null | undefined) => (id ? supa.signedUrl(inputs.get(id)!.storage_key, s.jwt, 3600) : null);
         const startUrl = await signed(job.input_asset_id);
         if (!startUrl && job.kind === 'i2v') throw new Error('Image de départ introuvable');
         const req = buildGenRequest(job, { backend: { id: provider } as never, inputPath: () => '', assetKind: () => 'image', character, workDir: '', signal: ac.signal, progress: () => {} });
-        sub = await submitModal(job, req, { startUrl, endUrl: await signed(p.endAssetId) });
+        sub = await submitDirect(provider, job, req, {
+          startUrl, endUrl: await signed(p.endAssetId),
+          startFile: job.input_asset_id ? inputs.get(job.input_asset_id)!.file : null, endFile: p.endAssetId ? inputs.get(p.endAssetId)!.file : null,
+        });
       } else {
         const ref = job.input_asset_id ? inputs.get(job.input_asset_id)?.file ?? null : null;
         sub = await submitRemote(provider, job, { character, inputPath: ref, jobId: job.id });
