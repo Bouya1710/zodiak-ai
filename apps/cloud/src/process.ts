@@ -11,7 +11,8 @@ import { sniff, EXT } from '../../api/src/serialize.ts';
 import { isBlockedImage } from '../../api/src/safety.ts';
 import { ffmpeg, makeThumb, probe } from '../../api/src/ffmpeg.ts';
 import { CanceledError } from '../../api/src/backends/types.ts';
-import { submitRemote, remoteStatus, isRemote } from './providers.ts';
+import { submitRemote, submitModal, remoteStatus, isRemote, providerFor } from './providers.ts';
+import { buildGenRequest } from '../../api/src/exec.ts';
 
 type Row = Record<string, any>;
 const iso = () => new Date().toISOString();
@@ -63,7 +64,7 @@ function fingerprint(job: Row, inputShas: string[], backendId: string): string {
 /** Télécharge dans un dossier temporaire les médias dont le job a besoin. */
 async function fetchInputs(s: Session, job: Row, dir: string) {
   const p = JSON.parse(job.params);
-  const ids = [job.input_asset_id, job.audio_asset_id, ...((p.assetIds ?? []) as string[])].filter(Boolean) as string[];
+  const ids = [job.input_asset_id, job.audio_asset_id, p.endAssetId, ...((p.assetIds ?? []) as string[])].filter(Boolean) as string[];
   const rows = new Map<string, Row>();
   for (const id of new Set(ids)) {
     const r = (await supa.select('assets', { id: `eq.${id}`, select: '*' }, s.jwt))[0];
@@ -96,10 +97,22 @@ export async function processJob(s: Session, job: Row): Promise<void> {
 
     const character = job.character_id ? (await supa.select('characters', { id: `eq.${job.character_id}`, select: '*' }, s.jwt))[0] : undefined;
 
-    if (isRemote(be.id) && ['t2i', 'i2v', 't2v'].includes(job.kind)) {
-      const ref = job.input_asset_id ? inputs.get(job.input_asset_id)?.file ?? null : null;
-      const sub = await submitRemote(be.id, job, { character, inputPath: ref, jobId: job.id });
-      await update(job.id, { provider: be.id, provider_ref: sub.ref, provider_urls: JSON.stringify(sub.urls), fingerprint: fp, progress: 10, message: `Envoyé à ${be.id}` });
+    const provider = providerFor(job, be.id);
+    if (isRemote(provider) && ['t2i', 'i2v', 't2v'].includes(job.kind)) {
+      let sub;
+      if (provider === 'modal') {
+        // Le GPU télécharge lui-même les images (liens signés 1 h) : pas de limite de taille côté Vercel.
+        const p = JSON.parse(job.params);
+        const signed = async (id: string | null | undefined) => (id ? supa.signedUrl(inputs.get(id)!.storage_key, s.jwt, 3600) : null);
+        const startUrl = await signed(job.input_asset_id);
+        if (!startUrl) throw new Error('Le moteur ZODIAK demande une image de départ');
+        const req = buildGenRequest(job, { backend: { id: provider } as never, inputPath: () => '', assetKind: () => 'image', character, workDir: '', signal: ac.signal, progress: () => {} });
+        sub = await submitModal(job, req, { startUrl, endUrl: await signed(p.endAssetId) });
+      } else {
+        const ref = job.input_asset_id ? inputs.get(job.input_asset_id)?.file ?? null : null;
+        sub = await submitRemote(provider, job, { character, inputPath: ref, jobId: job.id });
+      }
+      await update(job.id, { provider, provider_ref: sub.ref, provider_urls: JSON.stringify(sub.urls), fingerprint: fp, progress: 10, message: provider === 'modal' ? 'Envoyé au moteur ZODIAK' : `Envoyé à ${provider}` });
       return; // la suite : webhook du fournisseur (ou interrogation lors du prochain suivi du job)
     }
 
@@ -151,7 +164,7 @@ export async function reconcile(s: Session, job: Row): Promise<Row> {
       const dir = path.join(os.tmpdir(), 'zodiak-jobs', job.id);
       fs.mkdirSync(dir, { recursive: true });
       try {
-        const dl = await fetch(st.url);
+        const dl = await fetch(st.url, st.headers ? { headers: st.headers } : undefined);
         if (!dl.ok) throw new Error(`téléchargement du résultat : ${dl.status}`);
         const buf = Buffer.from(await dl.arrayBuffer());
         const sn = sniff(buf);

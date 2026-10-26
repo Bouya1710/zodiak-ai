@@ -12,7 +12,7 @@ import { buildGenRequest } from '../../api/src/exec.ts';
 // soumission → webhook du fournisseur (/api/webhooks/<fournisseur>) → clôture au prochain suivi du job.
 
 type Row = Record<string, any>;
-export const isRemote = (id: string) => id === 'fal' || id === 'runpod';
+export const isRemote = (id: string) => id === 'fal' || id === 'runpod' || id === 'modal';
 
 export const webhookSig = (jobId: string) => crypto.createHmac('sha256', cloud.serverSecret).update(`webhook:${jobId}`).digest('hex').slice(0, 32);
 const hookUrl = (provider: string, jobId: string) =>
@@ -46,6 +46,29 @@ export function falBody(engineId: string, kind: string, req: { prompt: string; n
       return body;
     }
   }
+}
+
+/** Fournisseur d'un job : celui du modèle choisi (catalogue), sinon le moteur par défaut du site. */
+export function providerFor(job: Row, fallback: string): string {
+  const e = engineFor(job.kind, JSON.parse(job.params ?? '{}').engine);
+  return e?.provider ?? fallback;
+}
+
+const modalHeaders = () => {
+  const token = process.env.MODAL_TOKEN;
+  if (!token || !process.env.MODAL_SUBMIT_URL || !process.env.MODAL_STATUS_URL) throw new Error('MODAL_TOKEN / MODAL_SUBMIT_URL / MODAL_STATUS_URL manquants');
+  return { authorization: `Bearer ${token}`, 'content-type': 'application/json' };
+};
+
+/** Moteur ZODIAK (modèles libres sur Modal, modal/zodiak_gpu.py) : images par liens signés, suivi par interrogation. */
+export async function submitModal(job: Row, req: { prompt: string; negative: string }, o: { startUrl: string; endUrl?: string | null }): Promise<{ ref: string; urls: Record<string, string> }> {
+  const p = JSON.parse(job.params);
+  const body = { model: 'wan22-lightning', start_url: o.startUrl, end_url: o.endUrl ?? undefined, prompt: req.prompt, negative: req.negative,
+    resolution: p.draft ? '480p' : '720p', seconds: Math.min(5, Number(p.duration) || 5), seed: p.seed };
+  const res = await fetch(process.env.MODAL_SUBMIT_URL!, { method: 'POST', headers: modalHeaders(), body: JSON.stringify(body) });
+  const j = (await res.json().catch(() => ({}))) as any;
+  if (!res.ok || !j.id) throw new Error(`Modal : ${String(j.error ?? j.detail ?? res.status).slice(0, 200)}`);
+  return { ref: j.id, urls: { status: `${process.env.MODAL_STATUS_URL}?id=${encodeURIComponent(j.id)}` } };
 }
 
 export async function submitRemote(provider: string, job: Row, o: { character?: Row; inputPath: string | null; jobId: string }): Promise<{ ref: string; urls: Record<string, string> }> {
@@ -95,12 +118,19 @@ export async function submitRemote(provider: string, job: Row, o: { character?: 
   return { ref: j.id, urls: { status: `https://api.runpod.ai/v2/${ep}/status/${j.id}` } };
 }
 
-export type RemoteStatus = { state: 'pending' } | { state: 'failed'; error?: string } | { state: 'done'; url: string };
+export type RemoteStatus = { state: 'pending' } | { state: 'failed'; error?: string } | { state: 'done'; url: string; headers?: Record<string, string> };
 
 /** Interroge le fournisseur (utilisé comme filet de sécurité si le webhook n'est pas arrivé). */
 export async function remoteStatus(provider: string, job: Row): Promise<RemoteStatus> {
   const urls = JSON.parse(job.provider_urls ?? '{}') as Record<string, string>;
   if (urls.result) return { state: 'done', url: urls.result }; // posé par le webhook
+  if (provider === 'modal') {
+    const res = await fetch(urls.status!, { headers: modalHeaders() });
+    if (/video\/mp4/.test(res.headers.get('content-type') ?? '')) return { state: 'done', url: urls.status!, headers: modalHeaders() };
+    const st = (await res.json().catch(() => ({}))) as any;
+    if (!res.ok) return { state: 'failed', error: `Modal : ${res.status}` };
+    return st.state === 'failed' ? { state: 'failed', error: String(st.error ?? 'échec du GPU') } : { state: 'pending' };
+  }
   if (provider === 'fal') {
     const h = { authorization: `Key ${process.env.FAL_KEY}` };
     const st = (await (await fetch(urls.status!, { headers: h })).json()) as any;

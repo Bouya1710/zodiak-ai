@@ -16,3 +16,5 @@ CLAUDE.md
 .DS_Store
 .showcase-token.sha256
 showcase-jobs.json
+.modal-token
+__pycache__/

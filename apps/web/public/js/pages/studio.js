@@ -42,6 +42,8 @@ export function mount(root, qs) {
   const charSel = h('select', {}, h('option', { value: '' }, 'Aucun personnage'));
   const countSel = h('select', { 'aria-label': 'Nombre de générations' }, ...[1, 2, 3, 4].map((n) => h('option', { value: String(n) }, `x${n}`)));
   const inputField = assetField({ kind: 'image', label: 'Image de départ', onChange: () => syncConsent() });
+  const endField = assetField({ kind: 'image', label: 'Image de fin (facultative)', onChange: () => syncConsent() });
+  const endWrap = h('div', { class: 'end-wrap', hidden: true }, endField.el, h('p', { class: 'hint' }, 'Verrouille la dernière image : formes et cadrage respectés, moins d’essais ratés.'));
   const consent = consentBox(`J'ai le droit d'utiliser cette image (visages réels : voir l'avertissement)`);
   const consentWrap = h('div', { hidden: true }, consent.el);
   const err = h('div', { 'aria-live': 'polite' });
@@ -65,7 +67,7 @@ export function mount(root, qs) {
     const list = enginesFor();
     enginePick.hidden = list.length < 2;
     for (const x of list) {
-      enginePick.appendChild(h('button', { type: 'button', role: 'radio', class: 'engine', 'aria-checked': String(x.id === (e && e.id)), onclick: () => { engineSel[tab] = x.id; renderModel(); updateCost(); } },
+      enginePick.appendChild(h('button', { type: 'button', role: 'radio', class: 'engine', 'aria-checked': String(x.id === (e && e.id)), onclick: () => { engineSel[tab] = x.id; renderModel(); updateCost(); endWrap.hidden = !(kindNow() === 'i2v' && x.endImage); } },
         h('b', {}, x.name), h('span', {}, `${x.tag ? `${x.tag} · ` : ''}✦ ${x.credits}`)));
     }
     clear(modelCanvasBox);
@@ -189,7 +191,7 @@ export function mount(root, qs) {
     modeBtns.set(id, b);
     modeEl.appendChild(b);
   }
-  const refBox = h('div', { class: 'panel-box' }, inputField.el, consentWrap);
+  const refBox = h('div', { class: 'panel-box' }, inputField.el, endWrap, consentWrap);
   const promptBox = h('div', { class: 'panel-box' }, h('span', { class: 'label', id: 'plabel' }, 'Prompt'), prompt, counter,
     h('details', { class: 'collapsible' }, h('summary', {}, 'Modèles de prompt'), h('div', { class: 'stack' }, tplSel, tplDesc, tplVars, tplPreview)),
     h('details', { class: 'collapsible' }, h('summary', {}, 'Prompt négatif'), negative));
@@ -209,7 +211,7 @@ export function mount(root, qs) {
   function costNow() {
     const k = kindNow();
     const e = engineNow();
-    let c = e ? e.credits : cat.costs[k] || 1;
+    let c = e ? (tab === 'video' && draft.checked && e.draftCredits ? e.draftCredits : e.credits) : cat.costs[k] || 1;
     if (!e && tab === 'video' && draft.checked) c = Math.max(1, Math.ceil(c * 0.4));
     return c * Number(countSel.value || 1);
   }
@@ -223,6 +225,8 @@ export function mount(root, qs) {
     for (const [id, b] of modeBtns) b.setAttribute('aria-checked', String(id === vmode));
     modeEl.hidden = tab !== 'video';
     refBox.hidden = k !== 'i2v';
+    const en = engineNow();
+    endWrap.hidden = !(k === 'i2v' && en && en.endImage);
     durBoxWrap.hidden = tab !== 'video';
     cameraBox.hidden = tab !== 'video';
     document.getElementById('plabel').textContent = k === 'i2v' ? 'Prompt (mouvement souhaité)' : 'Prompt';
@@ -258,6 +262,8 @@ export function mount(root, qs) {
       const a = inputField.getAsset();
       if (!a) { err.appendChild(errorBox('Choisissez ou téléversez une image de départ.')); return; }
       base.inputAssetId = a.id;
+      const endA = !endWrap.hidden ? endField.getAsset() : null;
+      if (endA) base.endAssetId = endA.id;
       if (a.origin === 'upload') {
         if (!consent.input.checked) { err.appendChild(errorBox(`Cochez la case de consentement : vous devez avoir le droit d'utiliser cette image.`)); return; }
         base.consent = true;

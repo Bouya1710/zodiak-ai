@@ -44,7 +44,7 @@ function build(): Router {
   R.get('/api/catalog', () => ({
     models: catalog.models, cameraPresets: catalog.presets, templates: catalog.templates,
     sizes: catalog.sizes.map(({ id, label, width, height }) => ({ id, label, width, height })), costs: catalog.costs,
-    engines: backend().id === 'fal' ? catalog.engines.map(({ id, kinds, name, vendor, tag, credits }) => ({ id, kinds, name, vendor, tag, credits })) : [],
+    engines: backend().id === 'fal' ? catalog.engines.map(({ id, kinds, name, vendor, tag, credits, draftCredits, provider }) => ({ id, kinds, name, vendor, tag, credits, draftCredits, endImage: provider === 'modal' })) : [],
   }));
   R.get('/api/health', async () => { const db = await supa.ping(); return { ok: db, db, storage: db, backend: backend().id }; });
 

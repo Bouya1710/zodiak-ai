@@ -1,10 +1,7 @@
 [
-  { "id": "flux-schnell", "kinds": ["t2i"], "name": "FLUX.1 schnell", "vendor": "Black Forest Labs · libre", "tag": "Rapide", "credits": 1,
-    "endpoints": { "t2i": "fal-ai/flux/schnell" }, "note": "≈ 0,003 $ l'image" },
-  { "id": "nano-banana", "kinds": ["t2i"], "name": "Nano Banana", "vendor": "Google", "tag": "Qualité", "credits": 5,
-    "endpoints": { "t2i": "fal-ai/nano-banana" }, "note": "≈ 0,04 $ l'image" },
-  { "id": "wan-22", "kinds": ["i2v", "t2v"], "name": "Wan 2.2", "vendor": "Alibaba · libre", "tag": "720p", "credits": 45,
-    "endpoints": { "i2v": "fal-ai/wan/v2.2-a14b/image-to-video", "t2v": "fal-ai/wan/v2.2-a14b/text-to-video" }, "note": "≈ 0,41 $ les 5 s" },
-  { "id": "kling-25", "kinds": ["i2v", "t2v"], "name": "Kling 2.5 Turbo Pro", "vendor": "Kuaishou", "tag": "Cinéma", "credits": 40,
-    "endpoints": { "i2v": "fal-ai/kling-video/v2.5-turbo/pro/image-to-video", "t2v": "fal-ai/kling-video/v2.5-turbo/pro/text-to-video" }, "note": "≈ 0,35 $ les 5 s" }
+  {"id": "flux-schnell", "kinds": ["t2i"], "name": "FLUX.1 schnell", "vendor": "Black Forest Labs · libre", "tag": "Rapide", "credits": 1, "endpoints": {"t2i": "fal-ai/flux/schnell"}, "note": "≈ 0,003 $ l'image"},
+  {"id": "nano-banana", "kinds": ["t2i"], "name": "Nano Banana", "vendor": "Google", "tag": "Qualité", "credits": 5, "endpoints": {"t2i": "fal-ai/nano-banana"}, "note": "≈ 0,04 $ l'image"},
+  {"id": "zodiak-wan", "kinds": ["i2v"], "name": "ZODIAK Wan 2.2", "vendor": "Moteur ZODIAK · libre", "tag": "Début + fin", "credits": 30, "draftCredits": 10, "provider": "modal", "endpoints": {}, "note": "GPU Modal ≈ 0,30 $ en 720p, ≈ 0,10 $ en brouillon 480p (mesure du 26/10 à affiner)"},
+  {"id": "wan-22", "kinds": ["i2v", "t2v"], "name": "Wan 2.2", "vendor": "Alibaba · libre", "tag": "720p", "credits": 45, "endpoints": {"i2v": "fal-ai/wan/v2.2-a14b/image-to-video", "t2v": "fal-ai/wan/v2.2-a14b/text-to-video"}, "note": "≈ 0,41 $ les 5 s"},
+  {"id": "kling-25", "kinds": ["i2v", "t2v"], "name": "Kling 2.5 Turbo Pro", "vendor": "Kuaishou", "tag": "Cinéma", "credits": 40, "endpoints": {"i2v": "fal-ai/kling-video/v2.5-turbo/pro/image-to-video", "t2v": "fal-ai/kling-video/v2.5-turbo/pro/text-to-video"}, "note": "≈ 0,35 $ les 5 s"}
 ]

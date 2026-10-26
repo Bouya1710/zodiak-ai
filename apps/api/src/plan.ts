@@ -99,6 +99,13 @@ export async function planJob(deps: PlanDeps, body: Record<string, any>): Promis
       if (!inputAssetId) bad('Une image source est requise');
       const a = await owned(deps, inputAssetId!, ['image'], 'Image source');
       usesUpload = a.origin === 'upload';
+      // Image de fin facultative : verrouille la dernière image (moins d'essais ratés).
+      delete params.endAssetId;
+      if (body.endAssetId) {
+        const end = await owned(deps, String(body.endAssetId), ['image'], 'Image de fin');
+        usesUpload ||= end.origin === 'upload';
+        params.endAssetId = end.id;
+      }
       if (!prompt && !preset) bad('Un prompt ou un preset de caméra est requis');
       break;
     }
