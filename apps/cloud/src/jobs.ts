@@ -4,6 +4,7 @@ import * as supa from './supa.ts';
 import type { Session } from './session.ts';
 import { processJob, backend } from './process.ts';
 import { isRemote } from './providers.ts';
+import { monthStart } from './admin.ts';
 import { HttpError } from '../../api/src/ctx.ts';
 import { planJob } from '../../api/src/plan.ts';
 import { catalog } from '../../api/src/catalog.ts';
@@ -28,6 +29,9 @@ export async function createJob(s: Session, body: Record<string, any>): Promise<
   if (isRemote(backend().id) && ['t2i', 'i2v', 't2v'].includes(plan.kind)) {
     const spent = await supa.spentSince(new Date(Date.now() - 24 * 3600_000));
     if (spent + plan.cost > cloud.dailyBudget) throw new HttpError(503, 'budget_reached', 'Le quota de génération du jour est atteint. Réessayez demain.');
+    // Budget mensuel, tous fournisseurs (1 crédit ≈ 0,01 $).
+    const month = await supa.spentSince(monthStart());
+    if ((month + plan.cost) / 100 > cloud.monthlyBudgetUsd) throw new HttpError(503, 'budget_reached', 'Le budget de génération du mois est atteint. Réessayez le mois prochain.');
   }
   if (cloud.creditsEnabled) await supa.credits(s.user.id, -plan.cost, 'job', plan.id);
   let row: Row | null;

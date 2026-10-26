@@ -19,6 +19,8 @@ export const cloud = {
   jobTimeoutMs: 8 * 60_000,
   /** Plafond de crédits engagés sur 24 h pour tout le site (1 crédit ≈ 0,01 $ chez fal). */
   dailyBudget: int(e.DAILY_BUDGET_CREDITS, 500),
+  /** Budget mensuel du site en dollars, tous fournisseurs : alerte à 80 %, générations refusées à 100 %. */
+  monthlyBudgetUsd: int(e.MONTHLY_BUDGET_USD, 40),
 };
 
 export function assertCloudEnv(): void {

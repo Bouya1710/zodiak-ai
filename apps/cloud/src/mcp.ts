@@ -64,7 +64,7 @@ const TOOLS = [
   { name: 'zodiak_statut', description: "État d'une génération et liens de téléchargement du résultat (valables 1 h).", inputSchema: { type: 'object', required: ['job_id'], properties: { job_id: { type: 'string' } } } },
   { name: 'zodiak_creations', description: 'Dernières créations du compte avec leurs liens (valables 1 h).', inputSchema: { type: 'object', properties: { nombre: { type: 'integer', minimum: 1, maximum: 20 } } } },
   { name: 'zodiak_credits', description: 'Solde de crédits du compte ZODIAK AI et dernières opérations.', inputSchema: { type: 'object', properties: {} } },
-  { name: 'zodiak_fal', description: 'Propriétaire du site uniquement : solde du compte fal.ai et dépenses du site (24 h, 7 j, 30 j).', inputSchema: { type: 'object', properties: {} } },
+  { name: 'zodiak_fal', description: 'Propriétaire du site uniquement : dépenses du mois par fournisseur (Modal, Google, Kie.ai, fal), budget mensuel, alertes et soldes.', inputSchema: { type: 'object', properties: {} } },
 ];
 
 async function links(s: Session, ids: string[]) {

@@ -84,6 +84,14 @@ export async function startFakeSupabase() {
           if (a.p_op === 'delete') { t.splice(t.indexOf(row), 1); return json(res, 200, row); }
         }
         if (name === 'app_spent_since') return json(res, 200, tables.jobs!.filter((r) => r.created_at >= a.p_since).reduce((n, r) => n + (r.cost ?? 0), 0));
+        if (name === 'app_spent_by_engine') {
+          const by = new Map<string, { engine: string; credits: number; jobs: number }>();
+          for (const r of tables.jobs!.filter((r) => r.created_at >= a.p_since && ['queued', 'running', 'done'].includes(r.status) && !r.cache_hit)) {
+            const e = JSON.parse(r.params ?? '{}').engine ?? ''; const x = by.get(e) ?? { engine: e, credits: 0, jobs: 0 };
+            x.credits += r.cost ?? 0; x.jobs++; by.set(e, x);
+          }
+          return json(res, 200, [...by.values()]);
+        }
         return json(res, 404, { message: 'unknown rpc' });
       }
       // ---- PostgREST (RLS : lignes du propriétaire)

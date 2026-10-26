@@ -55,6 +55,9 @@ export async function credits(userId: string, delta: number, reason: string, job
 /** Crédits engagés par tous les utilisateurs depuis `since` (plafond quotidien). */
 export const spentSince = (since: Date) => rpc<number>('app_spent_since', { p_since: since.toISOString() });
 
+/** Même total, détaillé par modèle (suivi des dépenses par fournisseur). */
+export const spentByEngine = (since: Date) => rpc<{ engine: string; credits: number; jobs: number }[]>('app_spent_by_engine', { p_since: since.toISOString() });
+
 /** Nom affiché du profil (écrit par le serveur, fonction SQL app_profile). */
 export const setDisplayName = (userId: string, name: string) => rpc<Row>('app_profile', { p_user: userId, p_name: name });
 

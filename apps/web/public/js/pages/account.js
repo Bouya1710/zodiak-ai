@@ -36,7 +36,7 @@ export function mount(root, qs) {
     ['Compte', [['profil', 'Profil', '◉'], ['securite', 'Sécurité', '⚿']]],
     ['Utilisation', [['credits', 'Crédits', '✦'], ['#/galerie', 'Mes créations', '▦']]],
     ['Intégrations', [['connecteurs', 'Connecteurs', '⧉']]],
-    ...(me.owner ? [['Propriétaire', [['depenses', 'Dépenses fal', '$']]]] : []),
+    ...(me.owner ? [['Propriétaire', [['depenses', 'Dépenses', '$']]]] : []),
   ];
 
   function renderSide() {
@@ -179,15 +179,26 @@ export function mount(root, qs) {
   }
 
   async function depenses() {
-    head('Dépenses fal', 'Ce que le site a consommé chez fal.ai, et le solde du compte.');
+    head('Dépenses', 'Ce que le site a dépensé ce mois-ci chez chaque fournisseur, avec le budget mensuel.');
     const box = card(h('p', { class: 'hint' }, 'Chargement…'));
     panel.append(box);
     try {
       const r = await request('/admin/usage');
+      const m = r.month;
+      const line = (name, txt) => h('p', { class: 'hint' }, h('b', {}, `${name} : `), txt);
+      const { kie, fal } = r.balances;
       box.replaceChildren(
-        r.fal.error ? h('p', { class: 'hint' }, `Solde fal indisponible : ${r.fal.error}. Consultez fal.ai → Billing.`) : h('div', {}, h('span', { class: 'hint' }, 'Solde restant chez fal.ai'), h('div', { class: 'big' }, usd(r.fal.balance))),
-        h('div', { class: 'stat-grid' },
-          ...[['24 h', r.spent.usd.day, `plafond ${usd(r.spent.dailyBudget / 100)}`], ['7 jours', r.spent.usd.week, ''], ['30 jours', r.spent.usd.month, '']].map(([l, v, n]) => card(h('span', { class: 'hint' }, l), h('b', { class: 'big' }, usd(v)), n ? h('span', { class: 'hint' }, n) : null))));
+        ...r.alerts.map((a) => h('p', { class: 'alert alert-error', role: 'alert' }, a)),
+        h('div', {}, h('span', { class: 'hint' }, 'Ce mois-ci, tous fournisseurs'), h('div', { class: 'big' }, `${usd(m.usd)} / ${usd(m.budgetUsd)}`),
+          h('div', { class: 'progress', role: 'progressbar', 'aria-label': 'Part du budget mensuel utilisée', 'aria-valuemin': '0', 'aria-valuemax': '100', 'aria-valuenow': String(Math.min(100, Math.round((m.usd / m.budgetUsd) * 100))) },
+            h('div', { class: 'progress-fill', style: `width:${Math.min(100, (m.usd / m.budgetUsd) * 100)}%` }))),
+        h('div', { class: 'stat-grid' }, ...(m.providers.length ? m.providers : [{ name: 'Aucune dépense', usd: 0, jobs: 0 }]).map((p) =>
+          card(h('span', { class: 'hint' }, p.name), h('b', { class: 'big' }, usd(p.usd)), h('span', { class: 'hint' }, `${p.jobs} génération${p.jobs > 1 ? 's' : ''}`)))),
+        h('p', { class: 'hint' }, 'Estimation d’après le tarif de chaque modèle (1 crédit ≈ 0,01 $), générations échouées exclues. Les factures réelles restent sur les sites des fournisseurs.'),
+        line('Dernières 24 h', `${usd(r.spent.usd.day)} (plafond ${usd(r.spent.dailyBudget / 100)})`),
+        line('Solde Kie.ai', kie.error ? `indisponible (${kie.error})` : `${kie.credits} crédits (≈ ${usd(kie.usd)})`),
+        ...(fal.error ? [] : [line('Solde fal.ai', usd(fal.balance))]),
+        line('Google et Modal', 'pas de solde lisible par API : voir aistudio.google.com et modal.com/settings/usage'));
     } catch (e) { box.replaceChildren(errorBox(describeError(e))); }
   }
 
